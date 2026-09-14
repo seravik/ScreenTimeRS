@@ -1,19 +1,25 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+
+echo Building ScreenTime RS v0.2.1...
 call build-windows.bat
 if errorlevel 1 exit /b 1
-where iscc >nul 2>nul
-if errorlevel 1 (
+
+set "ISCC=C:\PROGRA~2\INNOSE~1\ISCC.exe"
+if not exist "%ISCC%" (
   echo Inno Setup compiler was not found.
-  echo Install Inno Setup, then run this file again.
+  echo Expected: %ISCC%
   exit /b 2
 )
-if not exist dist mkdir dist
-iscc installer\ScreenTimeRS-v0.2.0.iss
+
+if exist installer-output rmdir /s /q installer-output
+mkdir installer-output
+"%ISCC%" installer\ScreenTimeRS-v0.2.1.iss
 if errorlevel 1 exit /b 1
+
 echo.
 echo ========================================
-echo ScreenTime RS v0.2.0 installer complete!
-echo dist\ScreenTimeRS-v0.2.0-Setup.exe
+echo ScreenTime RS v0.2.1 installer complete!
+echo installer-output\ScreenTimeRS-v0.2.1-Setup.exe
 echo ========================================

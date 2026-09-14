@@ -13,10 +13,14 @@ use winreg::{enums::HKEY_CURRENT_USER, RegKey};
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW},
-    UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId},
+    UI::WindowsAndMessaging::{
+        DispatchMessageW, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+        PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
+    },
 };
 
 const APP_NAME: &str = "ScreenTime RS";
+const SHUTDOWN_FILE: &str = "shutdown.flag";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 #[derive(Clone, Default)]
@@ -190,7 +194,7 @@ fn is_locked() -> bool {
 fn is_locked()->bool { false }
 
 // WM_SYSCOMMAND/monitor power state integration can be expanded with a hidden window.
-// For v0.2.0, the foreground-window signal is used as a conservative monitor-off/locked indicator.
+// For v0.2.1, the foreground-window signal is used as a conservative monitor-off/locked indicator.
 fn monitor_on(locked: bool) -> bool { !locked }
 
 #[derive(serde::Serialize, Clone)]
@@ -205,8 +209,25 @@ struct JsonSnapshot {
     apps: Vec<JsonApp>, daily: Vec<JsonDaily>, locked: bool, monitor_on: bool, cpu: f32, memory_mb: u64,
 }
 
+fn data_dir() -> Option<std::path::PathBuf> {
+    ProjectDirs::from("com", "ScreenTimeRS", APP_NAME).map(|d| d.data_local_dir().to_path_buf())
+}
+
 fn snapshot_path() -> Option<std::path::PathBuf> {
-    ProjectDirs::from("com", "ScreenTimeRS", APP_NAME).map(|d| d.data_local_dir().join("snapshot.json"))
+    data_dir().map(|d| d.join("snapshot.json"))
+}
+
+fn shutdown_path() -> Option<std::path::PathBuf> {
+    data_dir().map(|d| d.join(SHUTDOWN_FILE))
+}
+
+fn request_shutdown() {
+    if let Some(path) = shutdown_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(path, b"shutdown");
+    }
 }
 
 fn write_snapshot(s: &Snapshot) {
@@ -219,7 +240,15 @@ fn write_snapshot(s: &Snapshot) {
             daily:s.daily.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(), locked:s.locked, monitor_on:s.monitor_on, cpu:s.cpu, memory_mb:s.memory_mb,
         };
         let tmp = path.with_extension("json.tmp");
-        if let Ok(text) = serde_json::to_string(&data) { let _ = std::fs::write(&tmp, text); let _ = std::fs::rename(&tmp, &path); }
+        if let Ok(text) = serde_json::to_string(&data) {
+            if std::fs::write(&tmp, text).is_ok() {
+                // Windows does not replace an existing destination with rename().
+                // Remove the previous snapshot first so the collector can keep
+                // updating the file after the initial snapshot has been created.
+                let _ = std::fs::remove_file(&path);
+                let _ = std::fs::rename(&tmp, &path);
+            }
+        }
     }
 }
 
@@ -231,6 +260,9 @@ impl Collector {
             let mut last=Instant::now();
             loop {
                 thread::sleep(Duration::from_secs(1));
+                if shutdown_path().map(|p| p.exists()).unwrap_or(false) {
+                    return;
+                }
                 let sec=last.elapsed().as_secs().clamp(1,2) as i64;
                 last=Instant::now();
                 let locked=is_locked();
@@ -314,18 +346,47 @@ fn main()->Result<()> {
 
     let menu=Menu::new();
     let show=MenuItem::new("打开 ScreenTime RS",true,None);
-    let quit=MenuItem::new("退出",true,None);
-    menu.append(&show)?; menu.append(&PredefinedMenuItem::separator())?; menu.append(&quit)?;
-    let _tray=TrayIconBuilder::new().with_icon(tray_icon()).with_tooltip(APP_NAME)
-        .with_menu(Box::new(menu)).build()?;
-    let show_id=show.id().clone(); let quit_id=quit.id().clone();
+    let quit=MenuItem::new("退出 ScreenTime RS",true,None);
+    menu.append(&show)?;
+    menu.append(&PredefinedMenuItem::separator())?;
+    menu.append(&quit)?;
+
+    // Keep the tray object alive for the entire process lifetime.
+    // Explicitly disable left-click menu behavior so the standard Windows
+    // right-click context menu always contains the two actions above.
+    let _tray=TrayIconBuilder::new()
+        .with_icon(tray_icon())
+        .with_tooltip(APP_NAME)
+        .with_menu(Box::new(menu))
+        .with_menu_on_left_click(false)
+        .build()?;
+    let show_id=show.id().clone();
+    let quit_id=quit.id().clone();
 
     if !background { launch_ui(); }
+
+    // Windows tray-icon requires a native Windows message loop on the same
+    // thread that owns the TrayIcon. Without pumping messages, the icon can
+    // appear but its context menu and menu clicks are not delivered.
     loop {
-        if let Ok(e)=MenuEvent::receiver().try_recv() {
-            if e.id==show_id { launch_ui(); }
-            if e.id==quit_id { return Ok(()); }
+        #[cfg(windows)]
+        unsafe {
+            let mut msg = MSG::default();
+            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
         }
-        thread::sleep(Duration::from_millis(250));
+
+        while let Ok(e)=MenuEvent::receiver().try_recv() {
+            if e.id==show_id {
+                launch_ui();
+            } else if e.id==quit_id {
+                request_shutdown();
+                return Ok(());
+            }
+        }
+
+        thread::sleep(Duration::from_millis(20));
     }
 }
