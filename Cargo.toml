@@ -1,0 +1,29 @@
+[package]
+name = "screentime-rs"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+eframe = { version = "0.32", features = ["default_fonts", "wgpu"] }
+egui = "0.32"
+rusqlite = { version = "0.37", features = ["bundled"] }
+sysinfo = "0.37"
+tray-icon = "0.21"
+directories = "6"
+chrono = { version = "0.4", features = ["clock"] }
+anyhow = "1"
+image = { version = "0.25", default-features = false, features = ["ico", "png"] }
+winreg = "0.55"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_SystemServices",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading"
+] }
+
+[build-dependencies]
+winresource = "0.1"
