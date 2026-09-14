@@ -1,0 +1,33 @@
+<Window
+    x:Class="ScreenTimeRS.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Grid.Row="0" Padding="24,18,24,14" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="ScreenTime RS" FontSize="22" FontWeight="SemiBold"/>
+                    <TextBlock Text="Windows 使用时间与应用统计" Opacity="0.65" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ThemeButton" Click="ThemeButton_Click" Content="主题"/>
+                    <Button Click="RefreshButton_Click" Content="刷新"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <NavigationView x:Name="Nav" Grid.Row="1" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" SelectionChanged="Nav_SelectionChanged" Loaded="Nav_Loaded" PaneDisplayMode="Left">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="概览" Tag="overview" Icon="Home"/>
+                <NavigationViewItem Content="应用使用时间" Tag="apps" Icon="AllApps"/>
+                <NavigationViewItem Content="统计" Tag="stats" Icon="Library"/>
+                <NavigationViewItem Content="设置" Tag="settings" Icon="Setting"/>
+            </NavigationView.MenuItems>
+            <Frame x:Name="ContentFrame"/>
+        </NavigationView>
+    </Grid>
+</Window>

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>ScreenTimeRS.UI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackage>false</AppxPackage>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <UseWinUI>true</UseWinUI>
+    <ApplicationIcon>..\assets\ScreenTimeRS.ico</ApplicationIcon>
+    <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
+    <EnableDefaultPageItems>true</EnableDefaultPageItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.30" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\assets\ScreenTimeRS.ico" Link="Assets\ScreenTimeRS.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

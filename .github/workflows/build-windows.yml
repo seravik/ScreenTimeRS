@@ -2,7 +2,7 @@ name: Build Windows x64
 
 on:
   push:
-    tags: ["v0.1.0"]
+    tags: ["v0.2.0"]
   workflow_dispatch:
 
 jobs:
@@ -13,8 +13,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
       - run: cargo build --release --target x86_64-pc-windows-msvc
+      - run: dotnet publish ui/ScreenTimeRS.UI.csproj -c Release -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -o dist/ui
+      - shell: pwsh
+        run: Copy-Item target/x86_64-pc-windows-msvc/release/screentime-rs.exe dist/ui/screentime-rs.exe -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: ScreenTimeRS-v0.1.0-windows-x64
-          path: target/x86_64-pc-windows-msvc/release/screentime-rs.exe
+          name: ScreenTimeRS-v0.2.0-windows-x64
+          path: dist/ui/

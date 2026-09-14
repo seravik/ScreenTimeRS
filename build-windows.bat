@@ -1,9 +1,18 @@
 @echo off
 setlocal
-echo Building ScreenTime RS v0.1.0...
+cd /d "%~dp0"
+echo Building ScreenTime RS v0.2.0...
 cargo build --release
 if errorlevel 1 exit /b 1
-if not exist dist mkdir dist
-copy /Y target\release\screentime-rs.exe dist\ScreenTimeRS-v0.1.0.exe >nul
+if not exist dist\ui mkdir dist\ui
+where dotnet >nul 2>nul
+if errorlevel 1 (
+  echo .NET SDK is required for the WinUI 3 interface.
+  exit /b 2
+)
+dotnet publish ui\ScreenTimeRS.UI.csproj -c Release -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -o dist\ui
+if errorlevel 1 exit /b 1
+copy /Y target\release\screentime-rs.exe dist\ui\screentime-rs.exe >nul
 echo.
-echo Output: dist\ScreenTimeRS-v0.1.0.exe
+echo Output: dist\ui\ScreenTimeRS.UI.exe
+echo.
