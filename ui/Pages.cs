@@ -351,7 +351,7 @@ public sealed class SettingsPage : Page
         theme = new ComboBox { Width = 240 };
         theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色"); p.Children.Add(theme);
         p.Children.Add(new TextBlock { Text = "关于", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.4\nRust monitoring core + WinUI 3 / Fluent UI" });
+        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.5\nRust monitoring core + WinUI 3 / Fluent UI" });
         Content = new ScrollViewer { Content = p };
         SetDark(dark);
     }

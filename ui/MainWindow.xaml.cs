@@ -39,10 +39,19 @@ public sealed partial class MainWindow : Window
 
         SetWindowIdentity();
 
-        // Persist the NavigationView pane state so a collapsed navigation pane
-        // stays collapsed after reopening the app, including tray launches.
-        Nav.PaneClosed += (_, _) => SaveNavigationPaneState(false);
-        Nav.PaneOpened += (_, _) => SaveNavigationPaneState(true);
+        // Persist the NavigationView pane state immediately when the actual
+        // IsPaneOpen dependency property changes. This avoids relying only on
+        // the end-of-animation PaneClosed/PaneOpened events, which can be missed
+        // when the window is closed quickly with the X button.
+        Nav.RegisterPropertyChangedCallback(NavigationView.IsPaneOpenProperty, (_, _) =>
+        {
+            SaveNavigationPaneState(Nav.IsPaneOpen);
+        });
+
+        // Also write the latest value when the window closes so the saved state
+        // is correct even if the pane is being animated during shutdown.
+        Closed += (_, _) => SaveNavigationPaneState(Nav.IsPaneOpen);
+
         Nav.IsPaneOpen = LoadNavigationPaneState();
 
         // A previous tray exit request must never affect a new launch.
