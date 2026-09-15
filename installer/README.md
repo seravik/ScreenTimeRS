@@ -1,20 +1,21 @@
-# ScreenTime RS v0.2.3 Installer
+# ScreenTime RS v0.2.4 安装程序
 
-The installer is built with Inno Setup 6 after publishing the WinUI 3 frontend and copying the Rust monitoring executable into `dist\ui`.
+本安装程序使用 Inno Setup 6 构建。构建前会先编译 Rust 后台采集器，并发布 WinUI 3 前端，然后由 Inno Setup 生成可安装的 Windows x64 EXE。
 
-Build from the project root:
+## 构建
+
+在项目根目录执行：
 
 ```powershell
 .\build-installer.bat
 ```
 
-Output:
+输出：
 
 ```text
-dist\ScreenTimeRS-v0.2.3-Setup.exe
+installer-output\ScreenTimeRS-v0.2.4-Setup.exe
 ```
 
-The installer is per-user (`PrivilegesRequired=lowest`) and creates optional desktop and Windows startup shortcuts.
+安装程序采用当前用户安装模式（`PrivilegesRequired=lowest`），支持可选的桌面快捷方式和 Windows 登录后自动启动。
 
-
-Note: The installer intentionally does not override Setup.exe with SetupIconFile. This avoids Windows resource-update failures (EndUpdateResource 110) observed on some systems. The installed application, Start Menu shortcut, and desktop shortcut still use ScreenTimeRS.ico.
+安装程序不会使用 `SetupIconFile` 覆盖 Setup.exe 图标，以避免部分系统出现 `EndUpdateResource 110` 资源更新错误。安装后的应用程序、开始菜单快捷方式和桌面快捷方式仍会使用 `ScreenTimeRS.ico`。

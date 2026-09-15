@@ -15,6 +15,9 @@ public sealed partial class MainWindow : Window
     private Process? _collector;
     private bool _dark;
 
+    private const string UserSettingsKey = @"Software\ScreenTimeRS";
+    private const string NavigationPaneValue = "NavigationPaneOpen";
+
     private readonly OverviewPage _overviewPage;
     private readonly AppsPage _appsPage;
     private readonly StatsPage _statsPage;
@@ -35,6 +38,12 @@ public sealed partial class MainWindow : Window
         _shutdownPath = Path.Combine(dataDir, "shutdown.flag");
 
         SetWindowIdentity();
+
+        // Persist the NavigationView pane state so a collapsed navigation pane
+        // stays collapsed after reopening the app, including tray launches.
+        Nav.PaneClosed += (_, _) => SaveNavigationPaneState(false);
+        Nav.PaneOpened += (_, _) => SaveNavigationPaneState(true);
+        Nav.IsPaneOpen = LoadNavigationPaneState();
 
         // A previous tray exit request must never affect a new launch.
         try { if (File.Exists(_shutdownPath)) File.Delete(_shutdownPath); } catch { }
@@ -166,6 +175,30 @@ public sealed partial class MainWindow : Window
         _appsPage.UpdateSnapshot(s);
         _statsPage.UpdateSnapshot(s);
         _settingsPage.SetDark(_dark);
+    }
+
+    private static bool LoadNavigationPaneState()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            var value = key?.GetValue(NavigationPaneValue);
+            return value is not int intValue || intValue != 0;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static void SaveNavigationPaneState(bool isOpen)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(NavigationPaneValue, isOpen ? 1 : 0, Microsoft.Win32.RegistryValueKind.DWord);
+        }
+        catch { }
     }
 
     private void Nav_Loaded(object sender, RoutedEventArgs e)
