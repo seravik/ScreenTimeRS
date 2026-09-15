@@ -336,8 +336,11 @@ public sealed class SettingsPage : Page
 {
     readonly CheckBox startup, background;
     readonly ComboBox theme;
+    private bool updatingTheme;
 
-    public SettingsPage(bool dark)
+    public event EventHandler<ThemeMode>? ThemeModeChanged;
+
+    public SettingsPage(ThemeMode mode)
     {
         var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         p.Children.Add(new TextBlock { Text = "设置", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
@@ -349,14 +352,31 @@ public sealed class SettingsPage : Page
         p.Children.Add(startup); p.Children.Add(background);
         p.Children.Add(new TextBlock { Text = "外观", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         theme = new ComboBox { Width = 240 };
-        theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色"); p.Children.Add(theme);
+        theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色");
+        theme.SelectionChanged += Theme_SelectionChanged;
+        p.Children.Add(theme);
         p.Children.Add(new TextBlock { Text = "关于", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.5\nRust monitoring core + WinUI 3 / Fluent UI" });
+        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.6\nRust monitoring core + WinUI 3 / Fluent UI" });
         Content = new ScrollViewer { Content = p };
-        SetDark(dark);
+        SetThemeMode(mode);
     }
 
-    public void SetDark(bool dark) { theme.SelectedIndex = dark ? 2 : 0; }
+    private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingTheme || theme.SelectedIndex < 0) return;
+
+        var mode = (ThemeMode)theme.SelectedIndex;
+        ThemeModeChanged?.Invoke(this, mode);
+    }
+
+    public void SetThemeMode(ThemeMode mode)
+    {
+        if (theme.SelectedIndex == (int)mode) return;
+
+        updatingTheme = true;
+        theme.SelectedIndex = (int)mode;
+        updatingTheme = false;
+    }
 
     static bool StartupEnabled()
     {

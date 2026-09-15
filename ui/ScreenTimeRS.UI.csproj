@@ -25,5 +25,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\assets\ScreenTimeRS.ico" Link="Assets\ScreenTimeRS.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\assets\ScreenTimeRS-titlebar.png" Link="Assets\ScreenTimeRS-titlebar.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -5,18 +6,27 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Windows.UI;
 
 namespace ScreenTimeRS.UI;
+
+public enum ThemeMode
+{
+    System = 0,
+    Light = 1,
+    Dark = 2
+}
 
 public sealed partial class MainWindow : Window
 {
     private readonly string _snapshotPath;
     private readonly string _shutdownPath;
     private Process? _collector;
-    private bool _dark;
+    private ThemeMode _themeMode;
 
     private const string UserSettingsKey = @"Software\ScreenTimeRS";
     private const string NavigationPaneValue = "NavigationPaneOpen";
+    private const string ThemeModeValue = "ThemeMode";
 
     private readonly OverviewPage _overviewPage;
     private readonly AppsPage _appsPage;
@@ -29,7 +39,6 @@ public sealed partial class MainWindow : Window
 
         // ProjectDirs::data_local_dir() on Windows resolves to:
         // %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data
-        // Keep the WinUI reader exactly aligned with ProjectDirs::data_local_dir().
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ScreenTimeRS", "ScreenTime RS", "data");
@@ -39,28 +48,30 @@ public sealed partial class MainWindow : Window
 
         SetWindowIdentity();
 
-        // Persist the NavigationView pane state immediately when the actual
-        // IsPaneOpen dependency property changes. This avoids relying only on
-        // the end-of-animation PaneClosed/PaneOpened events, which can be missed
-        // when the window is closed quickly with the X button.
+        // Use the custom title bar as the actual window title bar so the
+        // system title text/icon are not shown a second time.
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
         Nav.RegisterPropertyChangedCallback(NavigationView.IsPaneOpenProperty, (_, _) =>
         {
             SaveNavigationPaneState(Nav.IsPaneOpen);
         });
-
-        // Also write the latest value when the window closes so the saved state
-        // is correct even if the pane is being animated during shutdown.
         Closed += (_, _) => SaveNavigationPaneState(Nav.IsPaneOpen);
-
         Nav.IsPaneOpen = LoadNavigationPaneState();
 
-        // A previous tray exit request must never affect a new launch.
         try { if (File.Exists(_shutdownPath)) File.Delete(_shutdownPath); } catch { }
+
+        _themeMode = LoadThemeMode();
 
         _overviewPage = new OverviewPage();
         _appsPage = new AppsPage();
         _statsPage = new StatsPage();
-        _settingsPage = new SettingsPage(_dark);
+        _settingsPage = new SettingsPage(_themeMode);
+        _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
+
+        ApplyThemeMode(_themeMode, save: false);
+        RootGrid.ActualThemeChanged += RootGrid_ActualThemeChanged;
 
         StartCollector();
 
@@ -81,8 +92,6 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // WinUI 3 unpackaged apps otherwise commonly show the generic
-            // title "WinUI Desktop". Explicitly set both title and .ico.
             AppWindow.Title = "ScreenTime RS";
             var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "ScreenTimeRS.ico");
             if (!File.Exists(iconPath))
@@ -96,6 +105,107 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
+    private void RootGrid_ActualThemeChanged(FrameworkElement sender, object args)
+    {
+        ApplyTitleBarTheme();
+    }
+
+    private void ApplyTitleBarTheme()
+    {
+        try
+        {
+            var dark = RootGrid.ActualTheme == ElementTheme.Dark;
+            var background = Color.FromArgb(255,
+                dark ? (byte)32 : (byte)245,
+                dark ? (byte)32 : (byte)245,
+                dark ? (byte)32 : (byte)245);
+            var foreground = dark
+                ? Color.FromArgb(255, 245, 245, 245)
+                : Color.FromArgb(255, 32, 32, 32);
+            var hoverBackground = dark
+                ? Color.FromArgb(255, 52, 52, 52)
+                : Color.FromArgb(255, 232, 232, 232);
+            var pressedBackground = dark
+                ? Color.FromArgb(255, 64, 64, 64)
+                : Color.FromArgb(255, 218, 218, 218);
+            var inactiveBackground = background;
+            var inactiveForeground = dark
+                ? Color.FromArgb(255, 170, 170, 170)
+                : Color.FromArgb(255, 110, 110, 110);
+
+            var titleBar = AppWindow.TitleBar;
+            titleBar.BackgroundColor = background;
+            titleBar.ForegroundColor = foreground;
+            titleBar.InactiveBackgroundColor = inactiveBackground;
+            titleBar.InactiveForegroundColor = inactiveForeground;
+            titleBar.ButtonBackgroundColor = background;
+            titleBar.ButtonForegroundColor = foreground;
+            titleBar.ButtonHoverBackgroundColor = hoverBackground;
+            titleBar.ButtonHoverForegroundColor = foreground;
+            titleBar.ButtonPressedBackgroundColor = pressedBackground;
+            titleBar.ButtonPressedForegroundColor = foreground;
+            titleBar.ButtonInactiveBackgroundColor = inactiveBackground;
+            titleBar.ButtonInactiveForegroundColor = inactiveForeground;
+        }
+        catch { }
+    }
+
+    private void ApplyThemeMode(ThemeMode mode, bool save)
+    {
+        _themeMode = mode;
+        if (save)
+            SaveThemeMode(mode);
+
+        RootGrid.RequestedTheme = mode switch
+        {
+            ThemeMode.Light => ElementTheme.Light,
+            ThemeMode.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
+
+        _settingsPage?.SetThemeMode(mode);
+        ApplyTitleBarTheme();
+    }
+
+    private void SettingsPage_ThemeModeChanged(object? sender, ThemeMode mode)
+    {
+        ApplyThemeMode(mode, save: true);
+    }
+
+    private ThemeMode LoadThemeMode()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            var value = key?.GetValue(ThemeModeValue);
+            return value switch
+            {
+                string text when string.Equals(text, "light", StringComparison.OrdinalIgnoreCase) => ThemeMode.Light,
+                string text when string.Equals(text, "dark", StringComparison.OrdinalIgnoreCase) => ThemeMode.Dark,
+                _ => ThemeMode.System
+            };
+        }
+        catch
+        {
+            return ThemeMode.System;
+        }
+    }
+
+    private static void SaveThemeMode(ThemeMode mode)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(ThemeModeValue, mode switch
+            {
+                ThemeMode.Light => "light",
+                ThemeMode.Dark => "dark",
+                _ => "system"
+            });
+        }
+        catch { }
+    }
+
     private void StartCollector()
     {
         try
@@ -104,7 +214,6 @@ public sealed partial class MainWindow : Window
             if (!File.Exists(exe)) return;
 
             var fullExe = Path.GetFullPath(exe);
-
             foreach (var p in Process.GetProcessesByName("screentime-rs"))
             {
                 try
@@ -183,7 +292,6 @@ public sealed partial class MainWindow : Window
         _overviewPage.UpdateSnapshot(s);
         _appsPage.UpdateSnapshot(s);
         _statsPage.UpdateSnapshot(s);
-        _settingsPage.SetDark(_dark);
     }
 
     private static bool LoadNavigationPaneState()
@@ -214,7 +322,6 @@ public sealed partial class MainWindow : Window
     {
         if (Nav.MenuItems.Count > 0)
             Nav.SelectedItem = Nav.MenuItems[0];
-
         ShowSelectedPage();
     }
 
@@ -230,12 +337,8 @@ public sealed partial class MainWindow : Window
 
     private void ThemeButton_Click(object sender, RoutedEventArgs e)
     {
-        _dark = !_dark;
-
-        if (Content is FrameworkElement root)
-            root.RequestedTheme = _dark ? ElementTheme.Dark : ElementTheme.Light;
-
-        _settingsPage.SetDark(_dark);
+        var next = RootGrid.ActualTheme == ElementTheme.Dark ? ThemeMode.Light : ThemeMode.Dark;
+        ApplyThemeMode(next, save: true);
     }
 }
 
