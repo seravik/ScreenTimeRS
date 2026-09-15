@@ -1,8 +1,8 @@
-# ScreenTime RS v0.2.2
+# ScreenTime RS v0.2.3
 
 Windows screen-time and application-usage tracker built around a Rust monitoring core and a native **WinUI 3 / Fluent UI** desktop interface.
 
-## v0.2.2 highlights
+## v0.2.3 highlights
 
 - Native Windows 11-style WinUI 3 interface.
 - Fluent-style navigation: Overview, App Usage, Statistics, Settings.
@@ -13,12 +13,14 @@ Windows screen-time and application-usage tracker built around a Rust monitoring
 - Searchable application usage list with progress indicators.
 - System tray/background collector is retained.
 - Windows login startup continues to be supported.
-- Windows x64 GitHub Actions build and Inno Setup installer updated for v0.2.2.
+- Windows x64 GitHub Actions build and Inno Setup installer updated for v0.2.3.
 - Uses Windows App SDK 2.2 for the WinUI 3 interface.
 - Refreshes existing WinUI pages in place to prevent progress bars and icons from flashing.
 - Application icons are cached instead of being regenerated every refresh cycle.
 - The status InfoBar can now be closed with its X button.
 - Tray exit requests now close the UI and stop the collector cleanly.
+- Responsive overview cards adapt to smaller window widths so usage times remain fully visible.
+- Settings content remains left-aligned instead of shifting toward the center when the window is resized.
 
 ## Architecture
 
@@ -64,7 +66,7 @@ Expected outputs:
 ```text
 dist\ui\ScreenTimeRS.UI.exe
 dist\ui\screentime-rs.exe
-dist\ScreenTimeRS-v0.2.2-Setup.exe
+dist\ScreenTimeRS-v0.2.3-Setup.exe
 ```
 
 ## Data
@@ -81,4 +83,4 @@ No usage data is sent to a remote service by the application.
 
 ## Version
 
-Current release: **v0.2.2**
+Current release: **v0.2.3**

@@ -194,7 +194,7 @@ fn is_locked() -> bool {
 fn is_locked()->bool { false }
 
 // WM_SYSCOMMAND/monitor power state integration can be expanded with a hidden window.
-// For v0.2.2, the foreground-window signal is used as a conservative monitor-off/locked indicator.
+// For v0.2.3, the foreground-window signal is used as a conservative monitor-off/locked indicator.
 fn monitor_on(locked: bool) -> bool { !locked }
 
 #[derive(serde::Serialize, Clone)]

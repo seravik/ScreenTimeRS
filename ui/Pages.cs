@@ -24,13 +24,15 @@ public sealed class OverviewPage : Page
         var panel = new StackPanel { Spacing = 18, Padding = new Thickness(28) };
         panel.Children.Add(new TextBlock { Text = "概览", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
 
-        var cards = new Grid { ColumnSpacing = 14 };
+        var cards = new Grid { ColumnSpacing = 14, RowSpacing = 14 };
         for (int i = 0; i < 4; i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
         AddCard(cards, 0, "今天", "活跃时间", out values[0]);
         AddCard(cards, 1, "昨天", "活跃时间", out values[1]);
         AddCard(cards, 2, "本周", "周一至今天", out values[2]);
         AddCard(cards, 3, "本月", "本月累计", out values[3]);
+        cards.SizeChanged += (_, e) => UpdateCardLayout(cards, e.NewSize.Width);
         panel.Children.Add(cards);
+        UpdateCardLayout(cards, 1000);
 
         status = new InfoBar { IsOpen = true, IsClosable = true, Title = "正在记录使用时间" };
         status.Closed += (_, _) => statusClosed = true;
@@ -87,9 +89,38 @@ public sealed class OverviewPage : Page
             BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray), BorderThickness = new Thickness(1) };
         var p = new StackPanel { Spacing = 5 };
         p.Children.Add(new TextBlock { Text = title, Opacity = .65 });
-        value = new TextBlock { Text = "00小时 00分钟", FontSize = 25, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        value = new TextBlock
+        {
+            Text = "00小时 00分钟",
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None,
+            MinHeight = 34
+        };
         p.Children.Add(value); p.Children.Add(new TextBlock { Text = sub, Opacity = .6, FontSize = 12 });
         b.Child = p; Grid.SetColumn(b, col); g.Children.Add(b);
+    }
+
+    static void UpdateCardLayout(Grid g, double width)
+    {
+        int columns = width >= 900 ? 4 : width >= 560 ? 2 : 1;
+        int rows = (4 + columns - 1) / columns;
+
+        while (g.RowDefinitions.Count < rows)
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        while (g.RowDefinitions.Count > rows)
+            g.RowDefinitions.RemoveAt(g.RowDefinitions.Count - 1);
+
+        for (int i = 0; i < g.Children.Count; i++)
+        {
+            // Grid.SetColumn/SetRow require a FrameworkElement in this WinUI target.
+            if (g.Children[i] is FrameworkElement element)
+            {
+                Grid.SetColumn(element, i % columns);
+                Grid.SetRow(element, i / columns);
+            }
+        }
     }
 }
 
@@ -308,7 +339,7 @@ public sealed class SettingsPage : Page
 
     public SettingsPage(bool dark)
     {
-        var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 720 };
+        var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         p.Children.Add(new TextBlock { Text = "设置", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         p.Children.Add(new TextBlock { Text = "常规", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         startup = new CheckBox { Content = "登录 Windows 后自动启动", IsChecked = StartupEnabled() };
@@ -320,7 +351,7 @@ public sealed class SettingsPage : Page
         theme = new ComboBox { Width = 240 };
         theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色"); p.Children.Add(theme);
         p.Children.Add(new TextBlock { Text = "关于", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.2\nRust monitoring core + WinUI 3 / Fluent UI" });
+        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.3\nRust monitoring core + WinUI 3 / Fluent UI" });
         Content = new ScrollViewer { Content = p };
         SetDark(dark);
     }
