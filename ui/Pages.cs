@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32;
 
 namespace ScreenTimeRS.UI;
 
@@ -101,12 +102,32 @@ public sealed class AppsPage : Page
 
     public AppsPage()
     {
-        var root = new StackPanel { Spacing = 16, Padding = new Thickness(28) };
-        root.Children.Add(new TextBlock { Text = "应用使用时间", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        // Use a Grid with a star-sized content row so the ScrollViewer receives
+        // a finite viewport. A ScrollViewer inside a StackPanel can measure its
+        // content at infinity and therefore fail to become scrollable.
+        var root = new Grid { Padding = new Thickness(28), RowSpacing = 16 };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var title = new TextBlock { Text = "应用使用时间", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        Grid.SetRow(title, 0);
+        root.Children.Add(title);
+
         search.PlaceholderText = "搜索应用";
         search.TextChanged += (_, _) => RenderList();
+        Grid.SetRow(search, 1);
         root.Children.Add(search);
-        root.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(scroll, 2);
+        root.Children.Add(scroll);
+
         Content = root;
     }
 
@@ -290,17 +311,49 @@ public sealed class SettingsPage : Page
         var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 720 };
         p.Children.Add(new TextBlock { Text = "设置", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         p.Children.Add(new TextBlock { Text = "常规", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        startup = new CheckBox { Content = "登录 Windows 后自动启动", IsChecked = true };
+        startup = new CheckBox { Content = "登录 Windows 后自动启动", IsChecked = StartupEnabled() };
+        startup.Checked += (_, _) => SetStartup(true);
+        startup.Unchecked += (_, _) => SetStartup(false);
         background = new CheckBox { Content = "后台继续记录使用时间", IsChecked = true };
         p.Children.Add(startup); p.Children.Add(background);
         p.Children.Add(new TextBlock { Text = "外观", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         theme = new ComboBox { Width = 240 };
         theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色"); p.Children.Add(theme);
         p.Children.Add(new TextBlock { Text = "关于", FontSize = 20, Margin = new Thickness(0, 15, 0, 0), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.1\nRust monitoring core + WinUI 3 / Fluent UI" });
+        p.Children.Add(new TextBlock { Text = "ScreenTime RS\n版本 0.2.2\nRust monitoring core + WinUI 3 / Fluent UI" });
         Content = new ScrollViewer { Content = p };
         SetDark(dark);
     }
 
     public void SetDark(bool dark) { theme.SelectedIndex = dark ? 2 : 0; }
+
+    static bool StartupEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+            return key?.GetValue("ScreenTimeRS") is string value && !string.IsNullOrWhiteSpace(value);
+        }
+        catch { return false; }
+    }
+
+    static void SetStartup(bool enabled)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+            if (key == null) return;
+
+            if (enabled)
+            {
+                var exe = Path.Combine(AppContext.BaseDirectory, "ScreenTimeRS.UI.exe");
+                key.SetValue("ScreenTimeRS", $"\"{exe}\"");
+            }
+            else
+            {
+                key.DeleteValue("ScreenTimeRS", false);
+            }
+        }
+        catch { }
+    }
 }

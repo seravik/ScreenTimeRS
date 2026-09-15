@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.1 — Corrective rebuild
+## v0.2.2 — Corrective rebuild
 
 - 修复 WinUI 前端与 Rust 采集器数据目录不一致导致数据页面读取失败的问题。
 - 修复托盘退出标记路径不一致导致退出联动失败的问题。
@@ -8,15 +8,15 @@
 - 安装包输出目录改为 `installer-output`，降低旧 Setup.exe 被锁定导致 Inno Setup 编译失败的概率。
 
 
-## v0.2.1 — Maintenance Fixes
+## v0.2.2 — Maintenance Fixes
 
 - Fixed the WinUI frontend reading `snapshot.json` from the wrong LocalAppData directory, restoring Overview, App Usage and Statistics data.
 - Fixed the native window title showing `WinUI Desktop`; the title is now `ScreenTime RS`.
 - Fixed the WinUI title-bar icon by explicitly applying `assets/ScreenTimeRS.ico` at runtime.
 - Reinforced the Rust tray menu so it keeps a persistent `打开 ScreenTime RS` action and a visible `退出 ScreenTime RS` action.
-- Kept the release version at **v0.2.1**; this is a corrective rebuild of the same version.
+- Kept the release version at **v0.2.2**; this is a corrective rebuild of the same version.
 
-## v0.2.1 - 2026-09-14
+## v0.2.2 - 2026-09-14
 
 ### Fixed
 
@@ -29,8 +29,8 @@
 
 ### Changed
 
-- Version advanced from v0.2.0 to v0.2.1 as a bug-fix release focused on live UI refresh and application shutdown behavior.
-- Updated Windows build scripts, GitHub Actions, and Inno Setup configuration for v0.2.1.
+- Version advanced from v0.2.0 to v0.2.2 as a bug-fix release focused on live UI refresh and application shutdown behavior.
+- Updated Windows build scripts, GitHub Actions, and Inno Setup configuration for v0.2.2.
 
 
 ### 修复：v0.2.0 WinUI 数据采集与统计

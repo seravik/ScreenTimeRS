@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.2.1"
+#define MyAppVersion "0.2.2"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.2.1-Setup
+OutputBaseFilename=ScreenTimeRS-v0.2.2-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
-Name: "startup"; Description: "Start ScreenTime RS automatically when I sign in to Windows"; GroupDescription: "Windows startup:"; Flags: unchecked
+Name: "startup"; Description: "Start ScreenTime RS automatically when I sign in to Windows"; GroupDescription: "Windows startup:"
 
 [Files]
 Source: "..\dist\ui\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -35,7 +35,9 @@ Source: "..\assets\ScreenTimeRS.ico"; DestDir: "{app}"
 [Icons]
 Name: "{autoprograms}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\ScreenTimeRS.ico"
 Name: "{autodesktop}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\ScreenTimeRS.ico"
-Name: "{userstartup}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup; IconFilename: "{app}\ScreenTimeRS.ico"
+[Registry]
+; Use the per-user Run key for reliable Windows sign-in startup.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ScreenTimeRS"; ValueData: "{app}\{#MyAppExeName}"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch ScreenTime RS"; Flags: nowait postinstall skipifsilent
