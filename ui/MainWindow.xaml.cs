@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private const string NavigationPaneLengthValue = "NavigationPaneLength";
     private double _savedPaneLength = 320;
     private bool _resizingPane;
+    private Snapshot _latestSnapshot = new();
     private uint _resizePointerId;
 
     private readonly OverviewPage _overviewPage;
@@ -366,9 +367,26 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePages(Snapshot s)
     {
-        _overviewPage.UpdateSnapshot(s);
-        _appsPage.UpdateSnapshot(s);
-        _statsPage.UpdateSnapshot(s);
+        _latestSnapshot = s;
+        UpdateVisiblePage();
+    }
+
+    private void UpdateVisiblePage()
+    {
+        switch (Nav.SelectedItem is NavigationViewItem item ? item.Tag?.ToString() : "overview")
+        {
+            case "apps":
+                _appsPage.UpdateSnapshot(_latestSnapshot);
+                break;
+            case "stats":
+                _statsPage.UpdateSnapshot(_latestSnapshot);
+                break;
+            case "settings":
+                break;
+            default:
+                _overviewPage.UpdateSnapshot(_latestSnapshot);
+                break;
+        }
     }
 
     private static bool LoadNavigationPaneState()
@@ -472,6 +490,7 @@ public sealed partial class MainWindow : Window
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         ShowSelectedPage();
+        UpdateVisiblePage();
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)

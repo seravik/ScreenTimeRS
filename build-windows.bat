@@ -1,10 +1,11 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Building ScreenTime RS v0.3.1...
+echo Building ScreenTime RS v0.4.0...
 cargo build --release
 if errorlevel 1 exit /b 1
-if not exist dist\ui mkdir dist\ui
+if exist dist\ui rmdir /s /q dist\ui
+mkdir dist\ui
 where dotnet >nul 2>nul
 if errorlevel 1 (
   echo .NET SDK is required for the WinUI 3 interface.

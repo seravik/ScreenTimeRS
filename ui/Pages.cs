@@ -26,10 +26,12 @@ public sealed class OverviewPage : Page
     readonly InfoBar status;
     readonly TextBlock pageTitle;
     readonly TextBlock trendTitle;
-    readonly List<(TextBlock Label, ProgressBar Bar)> trend = new();
-    bool statusClosed;
+    readonly TextBlock trendSummary;
+    readonly Border[] trendBars = new Border[14];
+    readonly TextBlock[] trendLabels = new TextBlock[14];
     LanguageMode _language = LanguageMode.Chinese;
     Snapshot? _lastSnapshot;
+    bool statusClosed;
 
     public OverviewPage()
     {
@@ -51,20 +53,56 @@ public sealed class OverviewPage : Page
         status.Closed += (_, _) => statusClosed = true;
         panel.Children.Add(status);
 
-        var border = new Border { Padding = new Thickness(20), CornerRadius = new CornerRadius(12),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray), BorderThickness = new Thickness(1) };
-        var tp = new StackPanel { Spacing = 8 };
+        var trendBorder = new Border
+        {
+            Padding = new Thickness(20),
+            CornerRadius = new CornerRadius(12),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+            BorderThickness = new Thickness(1)
+        };
+        var trendPanel = new StackPanel { Spacing = 10 };
         trendTitle = new TextBlock { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        tp.Children.Add(trendTitle);
+        trendSummary = new TextBlock { FontSize = 12, Opacity = .65 };
+        trendPanel.Children.Add(trendTitle);
+        trendPanel.Children.Add(trendSummary);
+
+        var chartScroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollMode = ScrollMode.Disabled
+        };
+        var chart = new Grid { Height = 190, ColumnSpacing = 8, MinWidth = 700 };
         for (int i = 0; i < 14; i++)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            var label = new TextBlock { Width = 55 };
-            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 420, Height = 18 };
-            row.Children.Add(label); row.Children.Add(bar); tp.Children.Add(row);
-            trend.Add((label, bar));
+            chart.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            var day = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Stretch };
+            var barArea = new Grid { Height = 145, VerticalAlignment = VerticalAlignment.Bottom };
+            var bar = new Border
+            {
+                Width = 24,
+                Height = 4,
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Opacity = .9
+            };
+            barArea.Children.Add(bar);
+            Grid.SetColumn(day, i);
+            var label = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, FontSize = 11, Opacity = .68 };
+            day.Children.Add(barArea);
+            day.Children.Add(label);
+            chart.Children.Add(day);
+            trendBars[i] = bar;
+            trendLabels[i] = label;
         }
-        border.Child = tp; panel.Children.Add(border);
+        chartScroll.Content = chart;
+        trendPanel.Children.Add(chartScroll);
+        trendBorder.Child = trendPanel;
+        panel.Children.Add(trendBorder);
+
         Content = new ScrollViewer { Content = panel };
     }
 
@@ -92,6 +130,7 @@ public sealed class OverviewPage : Page
         values[1].Text = UiHelpers.Format(s.yesterday, _language);
         values[2].Text = UiHelpers.Format(s.week, _language);
         values[3].Text = UiHelpers.Format(s.month, _language);
+
         var name = string.IsNullOrWhiteSpace(s.current_app) ? "—" :
             UiHelpers.FriendlyName(new AppStat { name = s.current_app });
         status.Severity = s.locked ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
@@ -105,26 +144,42 @@ public sealed class OverviewPage : Page
 
         var days = s.daily.TakeLast(14).ToArray();
         var max = Math.Max(1, days.Select(x => x.seconds).DefaultIfEmpty(1).Max());
-        for (int i = 0; i < trend.Count; i++)
+        var total = days.Sum(x => x.seconds);
+        var average = days.Length == 0 ? 0 : total / days.Length;
+        trendSummary.Text = _language == LanguageMode.English
+            ? $"Total {UiHelpers.Format(total, _language)}  ·  Daily average {UiHelpers.Format(average, _language)}"
+            : $"14 天累计 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}";
+
+        for (int i = 0; i < trendBars.Length; i++)
         {
-            if (i < days.Length) {
-                trend[i].Label.Text = days[i].label;
-                trend[i].Bar.Maximum = max;
-                trend[i].Bar.Value = days[i].seconds;
-                ToolTipService.SetToolTip(trend[i].Bar, _language == LanguageMode.English ? $"{days[i].label}: {UiHelpers.Format(days[i].seconds, _language)}" : $"{days[i].label}：{UiHelpers.Format(days[i].seconds, _language)}");
-            } else {
-                trend[i].Label.Text = "";
-                trend[i].Bar.Maximum = max;
-                trend[i].Bar.Value = 0;
-                ToolTipService.SetToolTip(trend[i].Bar, _language == LanguageMode.English ? "No usage record" : "暂无使用记录");
+            if (i < days.Length)
+            {
+                trendLabels[i].Text = days[i].label;
+                var fraction = Math.Clamp(days[i].seconds / (double)max, 0.0, 1.0);
+                trendBars[i].Height = Math.Max(4, 135 * fraction);
+                ToolTipService.SetToolTip(trendBars[i],
+                    _language == LanguageMode.English
+                        ? $"{days[i].label}: {UiHelpers.Format(days[i].seconds, _language)}"
+                        : $"{days[i].label}：{UiHelpers.Format(days[i].seconds, _language)}");
+            }
+            else
+            {
+                trendLabels[i].Text = "";
+                trendBars[i].Height = 4;
+                ToolTipService.SetToolTip(trendBars[i], _language == LanguageMode.English ? "No usage record" : "暂无使用记录");
             }
         }
     }
 
     static void AddCard(Grid g, int col, out TextBlock value, out TextBlock title, out TextBlock sub)
     {
-        var b = new Border { Padding = new Thickness(18), CornerRadius = new CornerRadius(12),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray), BorderThickness = new Thickness(1) };
+        var b = new Border
+        {
+            Padding = new Thickness(18),
+            CornerRadius = new CornerRadius(12),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+            BorderThickness = new Thickness(1)
+        };
         var p = new StackPanel { Spacing = 5 };
         title = new TextBlock { Opacity = .65 };
         p.Children.Add(title);
@@ -147,15 +202,12 @@ public sealed class OverviewPage : Page
     {
         int columns = width >= 900 ? 4 : width >= 560 ? 2 : 1;
         int rows = (4 + columns - 1) / columns;
-
         while (g.RowDefinitions.Count < rows)
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         while (g.RowDefinitions.Count > rows)
             g.RowDefinitions.RemoveAt(g.RowDefinitions.Count - 1);
-
         for (int i = 0; i < g.Children.Count; i++)
         {
-            // Grid.SetColumn/SetRow require a FrameworkElement in this WinUI target.
             if (g.Children[i] is FrameworkElement element)
             {
                 Grid.SetColumn(element, i % columns);
@@ -527,14 +579,14 @@ public sealed class SettingsPage : Page
 
         pageTitle.Text = en ? "Settings" : "设置";
         generalTitle.Text = en ? "General" : "常规";
-        startupText.Text = en ? "Start ScreenTime RS when I sign in to Windows" : "登录 Windows 后自动启动";
+        startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : "登录 Windows 后在后台静默启动";
         backgroundText.Text = en ? "Continue recording usage time in the background" : "后台继续记录使用时间";
         appearanceTitle.Text = en ? "Appearance" : "外观";
         languageTitle.Text = en ? "Language" : "语言";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.3.1\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.3.1\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.4.0\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.4.0\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -574,8 +626,8 @@ public sealed class SettingsPage : Page
             if (key == null) return;
             if (enabled)
             {
-                var exe = Path.Combine(AppContext.BaseDirectory, "ScreenTimeRS.UI.exe");
-                key.SetValue("ScreenTimeRS", $"\"{exe}\"");
+                var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
+                key.SetValue("ScreenTimeRS", $"\"{exe}\" --background");
             }
             else key.DeleteValue("ScreenTimeRS", false);
         }

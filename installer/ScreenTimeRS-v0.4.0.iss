@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.3.1"
+#define MyAppVersion "0.4.0"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.3.1-Setup
+OutputBaseFilename=ScreenTimeRS-v0.4.0-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -32,10 +32,10 @@ Name: "startup"; Description: "{cm:StartupDescription}"; GroupDescription: "{cm:
 
 [CustomMessages]
 english.ShortcutGroup=Shortcuts:
-english.StartupDescription=Start ScreenTime RS automatically when I sign in to Windows
+english.StartupDescription=Start ScreenTime RS silently in the background when I sign in to Windows
 english.StartupGroup=Windows startup:
 chinesesimp.ShortcutGroup=快捷方式：
-chinesesimp.StartupDescription=登录 Windows 时自动启动 ScreenTime RS
+chinesesimp.StartupDescription=登录 Windows 时在后台静默启动 ScreenTime RS
 chinesesimp.StartupGroup=Windows 启动：
 
 [Files]
@@ -49,7 +49,7 @@ Name: "{autoprograms}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; IconFil
 Name: "{autodesktop}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\ScreenTimeRS.ico"
 [Registry]
 ; Use the per-user Run key for reliable Windows sign-in startup.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ScreenTimeRS"; ValueData: "{app}\{#MyAppExeName}"; Tasks: startup; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ScreenTimeRS"; ValueData: """{app}\screentime-rs.exe"" --background"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch ScreenTime RS"; Flags: nowait postinstall skipifsilent

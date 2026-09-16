@@ -7,7 +7,6 @@ use rusqlite::{params, Connection};
 use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use tray_icon::{menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem}, Icon, TrayIconBuilder};
-use winreg::{enums::HKEY_CURRENT_USER, RegKey};
 
 #[cfg(windows)]
 use windows::Win32::{
@@ -21,8 +20,6 @@ use windows::Win32::{
 
 const APP_NAME: &str = "ScreenTime RS";
 const SHUTDOWN_FILE: &str = "shutdown.flag";
-const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-
 #[derive(Clone, Default)]
 struct AppStat {
     name: String,
@@ -115,46 +112,7 @@ impl Database {
         }
         Ok(out)
     }
-    fn get(&self, key: &str) -> Option<String> {
-        self.conn().ok()?.query_row(
-            "SELECT value FROM settings WHERE key=?1", params![key], |r| r.get(0)
-        ).ok()
-    }
-    fn set(&self, key: &str, value: &str) -> Result<()> {
-        let c = self.conn()?;
-        c.execute(
-            "INSERT INTO settings(key,value) VALUES(?1,?2)
-             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            params![key,value])?;
-        Ok(())
-    }
-}
 
-fn fmt(s: i64) -> String { format!("{:02}h {:02}m", s/3600, (s%3600)/60) }
-
-fn startup_enabled() -> bool {
-    #[cfg(windows)] {
-        let k = RegKey::predef(HKEY_CURRENT_USER);
-        if let Ok(key) = k.open_subkey(RUN_KEY) {
-            return key.get_value::<String,_>("ScreenTimeRS").is_ok();
-        }
-    }
-    false
-}
-
-fn set_startup(on: bool) -> Result<()> {
-    #[cfg(windows)] {
-        let k = RegKey::predef(HKEY_CURRENT_USER);
-        let (key, _) = k.create_subkey(RUN_KEY)?;
-        if on {
-            let exe = std::env::current_exe()?;
-            let cmd = format!(r#""{}" --background"#, exe.display());
-            key.set_value("ScreenTimeRS", &cmd)?;
-        } else {
-            let _ = key.delete_value("ScreenTimeRS");
-        }
-    }
-    Ok(())
 }
 
 #[cfg(windows)]
@@ -272,7 +230,7 @@ struct Collector;
 impl Collector {
     fn start(db: Arc<Database>, snap: Arc<Mutex<Snapshot>>) {
         thread::spawn(move || {
-            let mut sys=System::new_all();
+            let mut sys=System::new();
             let mut last=Instant::now();
             loop {
                 thread::sleep(Duration::from_secs(1));

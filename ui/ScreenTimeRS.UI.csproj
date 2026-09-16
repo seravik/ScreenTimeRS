@@ -14,6 +14,9 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <AppxPackage>false</AppxPackage>
     <PublishReadyToRun>false</PublishReadyToRun>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
     <ApplicationIcon>..\assets\ScreenTimeRS.ico</ApplicationIcon>

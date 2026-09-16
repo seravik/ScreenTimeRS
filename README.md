@@ -1,13 +1,18 @@
-# ScreenTime RS v0.3.1
+# ScreenTime RS v0.4.0
 
 ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具。项目采用 **Rust 监控核心 + WinUI 3 / Fluent UI 原生 Windows 界面**，在本机完成使用时间采集、数据存储和可视化展示。
 
-## v0.3.1 更新
+## v0.4.0 更新
 
-### 修复
+### 新增
+- 重做“概览 → 最近 14 天”时间轴，鼠标悬浮每日时间条可查看具体使用时长。
+- 支持 Windows 登录后后台静默启动，不自动打开主窗口。
 
-- 修复 English 模式下“App usage”页面应用使用时长仍显示中文“小时 / 分钟”的问题。
-- 修复切换语言后应用列表使用时长未即时同步更新的问题。
+### 优化
+- 优化实时页面刷新，减少不必要的 UI 重建。
+- 优化 Rust 后台采集器资源使用与初始化速度。
+- 优化 .NET 发布配置，减少不必要的调试产物。
+- 优化软件启动与运行响应。
 
 ## 项目架构
 
@@ -62,7 +67,7 @@ dist\ui\screentime-rs.exe
 安装程序输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.3.1-Setup.exe
+installer-output\ScreenTimeRS-v0.4.0-Setup.exe
 ```
 
 安装程序使用 Inno Setup 6，并采用当前用户安装方式，不要求管理员权限。安装时可以选择创建桌面快捷方式以及登录 Windows 后自动启动。
@@ -96,7 +101,7 @@ HKEY_CURRENT_USER\Software\ScreenTimeRS\NavigationPaneOpen
 当前版本标签：
 
 ```text
-v0.3.1
+v0.4.0
 ```
 
 ## 开源许可
@@ -105,4 +110,4 @@ v0.3.1
 
 ## 当前版本
 
-**v0.3.1**
+**v0.4.0**
