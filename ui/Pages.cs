@@ -173,6 +173,7 @@ public sealed class AppsPage : Page
     readonly TextBlock title = new();
     readonly Dictionary<string, AppRow> rows = new(StringComparer.OrdinalIgnoreCase);
     Snapshot snapshot = new();
+    LanguageMode _language = LanguageMode.Chinese;
 
     public AppsPage()
     {
@@ -231,6 +232,8 @@ public sealed class AppsPage : Page
             : new[] { "今天", "本周", "本月", "近半年", "近一年" };
         foreach (var item in items) period.Items.Add(item);
         period.SelectedIndex = Math.Clamp(index, 0, items.Length - 1);
+        _language = language;
+        RenderList();
     }
 
     public void UpdateSnapshot(Snapshot s) { snapshot = s; RenderList(); }
@@ -253,8 +256,8 @@ public sealed class AppsPage : Page
         }
         foreach (var app in apps) {
             var key = Key(app);
-            if (!rows.TryGetValue(key, out var row)) { row = new AppRow(app); rows[key] = row; }
-            row.Update(app, source.Sum(x => x.seconds));
+            if (!rows.TryGetValue(key, out var row)) { row = new AppRow(app, _language); rows[key] = row; }
+            row.Update(app, source.Sum(x => x.seconds), _language);
         }
 
         var ordered = apps.Select(a => rows[Key(a)].Border).ToArray();
@@ -277,7 +280,7 @@ public sealed class AppsPage : Page
         string iconKey = "";
         static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
-        public AppRow(AppStat app)
+        public AppRow(AppStat app, LanguageMode language)
         {
             var grid = new Grid { Padding = new Thickness(10), ColumnSpacing = 14 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
@@ -301,14 +304,14 @@ public sealed class AppsPage : Page
 
             Border = new Border { Child = grid, BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
                 BorderThickness = new Thickness(0, 0, 0, 1) };
-            Update(app, 0);
+            Update(app, 0, language);
         }
 
-        public void Update(AppStat app, long today)
+        public void Update(AppStat app, long today, LanguageMode language)
         {
             name.Text = UiHelpers.FriendlyName(app);
             path.Text = app.name + (string.IsNullOrWhiteSpace(app.exe_path) ? "" : " · " + app.exe_path);
-            time.Text = UiHelpers.Format(app.seconds);
+            time.Text = UiHelpers.Format(app.seconds, language);
             bar.Value = Math.Min(100, app.seconds * 100.0 / Math.Max(1, today));
             if (!string.Equals(iconKey, app.exe_path, StringComparison.OrdinalIgnoreCase)) {
                 iconKey = app.exe_path; SetIcon(app);
@@ -530,8 +533,8 @@ public sealed class SettingsPage : Page
         languageTitle.Text = en ? "Language" : "语言";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.3.0\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.3.0\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.3.1\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.3.1\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
