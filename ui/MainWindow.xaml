@@ -28,22 +28,22 @@
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="ScreenTime RS" FontSize="22" FontWeight="SemiBold"/>
-                    <TextBlock Text="Windows 使用时间与应用统计" Opacity="0.65" FontSize="12" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="AppHeaderTitle" Text="ScreenTime RS" FontSize="22" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="AppHeaderSubtitle" Text="Windows 使用时间与应用统计" Opacity="0.65" FontSize="12" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button x:Name="ThemeButton" Click="ThemeButton_Click" Content="主题"/>
-                    <Button Click="RefreshButton_Click" Content="刷新"/>
+                    <Button x:Name="RefreshButton" Click="RefreshButton_Click" Content="刷新"/>
                 </StackPanel>
             </Grid>
         </Border>
 
         <NavigationView x:Name="Nav" Grid.Row="2" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" SelectionChanged="Nav_SelectionChanged" Loaded="Nav_Loaded" PaneDisplayMode="Left">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="概览" Tag="overview" Icon="Home"/>
-                <NavigationViewItem Content="应用使用时间" Tag="apps" Icon="AllApps"/>
-                <NavigationViewItem Content="统计" Tag="stats" Icon="Library"/>
-                <NavigationViewItem Content="设置" Tag="settings" Icon="Setting"/>
+                <NavigationViewItem x:Name="NavOverview" Content="概览" Tag="overview" Icon="Home"/>
+                <NavigationViewItem x:Name="NavApps" Content="应用使用时间" Tag="apps" Icon="AllApps"/>
+                <NavigationViewItem x:Name="NavStats" Content="统计" Tag="stats" Icon="Library"/>
+                <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
             </NavigationView.MenuItems>
             <Frame x:Name="ContentFrame"/>
         </NavigationView>

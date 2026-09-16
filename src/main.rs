@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::Result;
-use chrono::{Datelike, Duration as ChronoDuration, Local, NaiveDate};
+use chrono::{Datelike, Duration as ChronoDuration, Local, Months, NaiveDate};
 use directories::ProjectDirs;
 use rusqlite::{params, Connection};
 use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
@@ -39,6 +39,10 @@ struct Snapshot {
     week: i64,
     month: i64,
     apps: Vec<AppStat>,
+    apps_week: Vec<AppStat>,
+    apps_month: Vec<AppStat>,
+    apps_half_year: Vec<AppStat>,
+    apps_year: Vec<AppStat>,
     daily: Vec<(String, i64)>,
     locked: bool,
     monitor_on: bool,
@@ -87,11 +91,17 @@ impl Database {
             params![start.to_string(), end.to_string()], |r| r.get(0))?)
     }
     fn apps_today(&self) -> Result<Vec<AppStat>> {
-        let d = Local::now().date_naive().to_string();
+        let today = Local::now().date_naive();
+        self.apps_range(today, today)
+    }
+
+    fn apps_range(&self, start: NaiveDate, end: NaiveDate) -> Result<Vec<AppStat>> {
         let c = self.conn()?;
         let mut st = c.prepare(
-            "SELECT app,MAX(seconds),MAX(exe_path) FROM app_usage WHERE date=?1 GROUP BY app ORDER BY MAX(seconds) DESC")?;
-        let rows = st.query_map(params![d], |r| Ok(AppStat {
+            "SELECT app,SUM(seconds),MAX(exe_path) FROM app_usage
+             WHERE date>=?1 AND date<=?2
+             GROUP BY app ORDER BY SUM(seconds) DESC")?;
+        let rows = st.query_map(params![start.to_string(), end.to_string()], |r| Ok(AppStat {
             name: r.get(0)?, seconds: r.get(1)?, exe_path: r.get(2).unwrap_or_default()
         }))?;
         Ok(rows.filter_map(Result::ok).collect())
@@ -206,7 +216,9 @@ struct JsonDaily { label: String, seconds: i64 }
 #[derive(serde::Serialize)]
 struct JsonSnapshot {
     current_app: String, current_window: String, today: i64, yesterday: i64, week: i64, month: i64,
-    apps: Vec<JsonApp>, daily: Vec<JsonDaily>, locked: bool, monitor_on: bool, cpu: f32, memory_mb: u64,
+    apps: Vec<JsonApp>, apps_week: Vec<JsonApp>, apps_month: Vec<JsonApp>,
+    apps_half_year: Vec<JsonApp>, apps_year: Vec<JsonApp>,
+    daily: Vec<JsonDaily>, locked: bool, monitor_on: bool, cpu: f32, memory_mb: u64,
 }
 
 fn data_dir() -> Option<std::path::PathBuf> {
@@ -237,6 +249,10 @@ fn write_snapshot(s: &Snapshot) {
             current_app: s.current_app.clone(), current_window: s.current_window.clone(),
             today:s.today, yesterday:s.yesterday, week:s.week, month:s.month,
             apps:s.apps.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_week:s.apps_week.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_month:s.apps_month.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_half_year:s.apps_half_year.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_year:s.apps_year.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
             daily:s.daily.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(), locked:s.locked, monitor_on:s.monitor_on, cpu:s.cpu, memory_mb:s.memory_mb,
         };
         let tmp = path.with_extension("json.tmp");
@@ -274,9 +290,15 @@ impl Collector {
                 sys.refresh_memory();
                 let today=Local::now().date_naive();
                 let yesterday=today-ChronoDuration::days(1);
-                let week_start = today - ChronoDuration::days(today.weekday().num_days_from_monday() as i64);
                 let month_start = today.with_day(1).unwrap();
+                let week_start = today - ChronoDuration::days(today.weekday().num_days_from_monday() as i64);
+                let six_months_ago = today.checked_sub_months(Months::new(6)).unwrap_or(today);
+                let year_ago = today.checked_sub_months(Months::new(12)).unwrap_or(today);
                 let apps=db.apps_today().unwrap_or_default();
+                let apps_week=db.apps_range(week_start,today).unwrap_or_default();
+                let apps_month=db.apps_range(month_start,today).unwrap_or_default();
+                let apps_half_year=db.apps_range(six_months_ago,today).unwrap_or_default();
+                let apps_year=db.apps_range(year_ago,today).unwrap_or_default();
                 let daily=db.daily(14).unwrap_or_default();
                 let mut s=snap.lock().unwrap();
                 *s=Snapshot {
@@ -285,7 +307,8 @@ impl Collector {
                     yesterday:db.range_total(yesterday,yesterday).unwrap_or(0),
                     week:db.range_total(week_start,today).unwrap_or(0),
                     month:db.range_total(month_start,today).unwrap_or(0),
-                    apps,daily,locked,monitor_on:monitor_on(locked),
+                    apps, apps_week, apps_month, apps_half_year, apps_year,
+                    daily,locked,monitor_on:monitor_on(locked),
                     cpu:sys.global_cpu_usage(),memory_mb:sys.used_memory()/1024/1024
                 };
                 write_snapshot(&s);
@@ -324,12 +347,18 @@ fn main()->Result<()> {
         let yesterday=today-ChronoDuration::days(1);
         let week_start=today-ChronoDuration::days(today.weekday().num_days_from_monday() as i64);
         let month_start=today.with_day(1).unwrap();
+        let six_months_ago=today.checked_sub_months(Months::new(6)).unwrap_or(today);
+        let year_ago=today.checked_sub_months(Months::new(12)).unwrap_or(today);
         let initial=Snapshot {
             today:db.range_total(today,today).unwrap_or(0),
             yesterday:db.range_total(yesterday,yesterday).unwrap_or(0),
             week:db.range_total(week_start,today).unwrap_or(0),
             month:db.range_total(month_start,today).unwrap_or(0),
             apps:db.apps_today().unwrap_or_default(),
+            apps_week:db.apps_range(week_start,today).unwrap_or_default(),
+            apps_month:db.apps_range(month_start,today).unwrap_or_default(),
+            apps_half_year:db.apps_range(six_months_ago,today).unwrap_or_default(),
+            apps_year:db.apps_range(year_ago,today).unwrap_or_default(),
             daily:db.daily(14).unwrap_or_default(),
             ..Snapshot::default()
         };

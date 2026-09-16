@@ -2,7 +2,7 @@ name: Build Windows EXE and Installer
 
 on:
   push:
-    tags: ["v0.2.6"]
+    tags: ["v0.3.0"]
   workflow_dispatch:
 
 jobs:
@@ -29,10 +29,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ScreenTimeRS-v0.2.6.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ScreenTimeRS-v0.3.0.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: ScreenTimeRS-v0.2.6-Windows-x64
+          name: ScreenTimeRS-v0.3.0-Windows-x64
           path: |
             dist/ui/
-            installer-output/ScreenTimeRS-v0.2.6-Setup.exe
+            installer-output/ScreenTimeRS-v0.3.0-Setup.exe

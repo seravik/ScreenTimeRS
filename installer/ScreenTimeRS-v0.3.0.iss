@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.2.6"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -9,22 +9,34 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\ScreenTime RS
+DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.2.6-Setup
+OutputBaseFilename=ScreenTimeRS-v0.3.0-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 
+[Languages]
+Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
-Name: "startup"; Description: "Start ScreenTime RS automatically when I sign in to Windows"; GroupDescription: "Windows startup:"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:ShortcutGroup}"
+Name: "startup"; Description: "{cm:StartupDescription}"; GroupDescription: "{cm:StartupGroup}"
+
+[CustomMessages]
+english.ShortcutGroup=Shortcuts:
+english.StartupDescription=Start ScreenTime RS automatically when I sign in to Windows
+english.StartupGroup=Windows startup:
+chinesesimp.ShortcutGroup=快捷方式：
+chinesesimp.StartupDescription=登录 Windows 时自动启动 ScreenTime RS
+chinesesimp.StartupGroup=Windows 启动：
 
 [Files]
 Source: "..\dist\ui\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

@@ -15,6 +15,7 @@
     <AppxPackage>false</AppxPackage>
     <PublishReadyToRun>false</PublishReadyToRun>
     <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
     <ApplicationIcon>..\assets\ScreenTimeRS.ico</ApplicationIcon>
     <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
     <EnableDefaultPageItems>true</EnableDefaultPageItems>

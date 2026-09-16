@@ -1,7 +1,10 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -23,10 +26,16 @@ public sealed partial class MainWindow : Window
     private readonly string _shutdownPath;
     private Process? _collector;
     private ThemeMode _themeMode;
+    private LanguageMode _languageMode;
 
     private const string UserSettingsKey = @"Software\ScreenTimeRS";
     private const string NavigationPaneValue = "NavigationPaneOpen";
     private const string ThemeModeValue = "ThemeMode";
+    private const string LanguageModeValue = "LanguageMode";
+    private const string NavigationPaneLengthValue = "NavigationPaneLength";
+    private double _savedPaneLength = 320;
+    private bool _resizingPane;
+    private uint _resizePointerId;
 
     private readonly OverviewPage _overviewPage;
     private readonly AppsPage _appsPage;
@@ -56,20 +65,35 @@ public sealed partial class MainWindow : Window
         Nav.RegisterPropertyChangedCallback(NavigationView.IsPaneOpenProperty, (_, _) =>
         {
             SaveNavigationPaneState(Nav.IsPaneOpen);
+            if (Nav.IsPaneOpen)
+                Nav.OpenPaneLength = _savedPaneLength;
         });
-        Closed += (_, _) => SaveNavigationPaneState(Nav.IsPaneOpen);
+        Closed += (_, _) =>
+        {
+            SaveNavigationPaneState(Nav.IsPaneOpen);
+            SaveNavigationPaneLength(Nav.OpenPaneLength);
+        };
+        _savedPaneLength = LoadNavigationPaneLength();
+        Nav.OpenPaneLength = _savedPaneLength;
+        Nav.PointerPressed += Nav_PointerPressed;
+        Nav.PointerMoved += Nav_PointerMoved;
+        Nav.PointerReleased += Nav_PointerReleased;
+        Nav.PointerCanceled += Nav_PointerCanceled;
         Nav.IsPaneOpen = LoadNavigationPaneState();
 
         try { if (File.Exists(_shutdownPath)) File.Delete(_shutdownPath); } catch { }
 
         _themeMode = LoadThemeMode();
+        _languageMode = LoadLanguageMode();
 
         _overviewPage = new OverviewPage();
         _appsPage = new AppsPage();
         _statsPage = new StatsPage();
-        _settingsPage = new SettingsPage(_themeMode);
+        _settingsPage = new SettingsPage(_themeMode, _languageMode);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
+        _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
 
+        ApplyLanguage(_languageMode);
         ApplyThemeMode(_themeMode, save: false);
         RootGrid.ActualThemeChanged += RootGrid_ActualThemeChanged;
 
@@ -206,6 +230,59 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
+    private void SettingsPage_LanguageChanged(object? sender, LanguageMode language)
+    {
+        _languageMode = language;
+        SaveLanguageMode(language);
+        ApplyLanguage(language);
+    }
+
+    private void ApplyLanguage(LanguageMode language)
+    {
+        _languageMode = language;
+        var en = language == LanguageMode.English;
+        AppHeaderTitle.Text = "ScreenTime RS";
+        AppHeaderSubtitle.Text = en ? "Windows screen time and app usage statistics" : "Windows 使用时间与应用统计";
+        ThemeButton.Content = en ? "Theme" : "主题";
+        RefreshButton.Content = en ? "Refresh" : "刷新";
+        NavOverview.Content = en ? "Overview" : "概览";
+        NavApps.Content = en ? "App usage" : "应用使用时间";
+        NavStats.Content = en ? "Statistics" : "统计";
+        NavSettings.Content = en ? "Settings" : "设置";
+        _overviewPage.ApplyLanguage(language);
+        _appsPage.ApplyLanguage(language);
+        _statsPage.ApplyLanguage(language);
+        _settingsPage.SetLanguage(language);
+    }
+
+    private LanguageMode LoadLanguageMode()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            var value = key?.GetValue(LanguageModeValue);
+            return value switch
+            {
+                string text when string.Equals(text, "en", StringComparison.OrdinalIgnoreCase) => LanguageMode.English,
+                _ => LanguageMode.Chinese
+            };
+        }
+        catch
+        {
+            return LanguageMode.Chinese;
+        }
+    }
+
+    private static void SaveLanguageMode(LanguageMode mode)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(LanguageModeValue, mode == LanguageMode.English ? "en" : "zh-CN");
+        }
+        catch { }
+    }
+
     private void StartCollector()
     {
         try
@@ -318,6 +395,73 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
+    private void Nav_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!Nav.IsPaneOpen) return;
+        var point = e.GetCurrentPoint(Nav);
+        var edge = Nav.OpenPaneLength;
+        if (point.Position.X >= edge - 10 && point.Position.X <= edge + 10)
+        {
+            _resizingPane = true;
+            _resizePointerId = point.PointerId;
+            Nav.CapturePointer(e.Pointer);
+            e.Handled = true;
+        }
+    }
+
+    private void Nav_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_resizingPane || e.Pointer.PointerId != _resizePointerId) return;
+        var point = e.GetCurrentPoint(Nav);
+        var width = Math.Clamp(point.Position.X, 220, 480);
+        Nav.OpenPaneLength = width;
+        _savedPaneLength = width;
+        e.Handled = true;
+    }
+
+    private void Nav_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_resizingPane || e.Pointer.PointerId != _resizePointerId) return;
+        _resizingPane = false;
+        _savedPaneLength = Nav.OpenPaneLength;
+        SaveNavigationPaneLength(_savedPaneLength);
+        Nav.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Nav_PointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_resizingPane || e.Pointer.PointerId != _resizePointerId) return;
+        _resizingPane = false;
+        _savedPaneLength = Nav.OpenPaneLength;
+        SaveNavigationPaneLength(_savedPaneLength);
+        try { Nav.ReleasePointerCapture(e.Pointer); } catch { }
+    }
+
+    private static double LoadNavigationPaneLength()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            var value = key?.GetValue(NavigationPaneLengthValue);
+            if (value is int i) return Math.Clamp(i, 220, 480);
+            if (value is long l) return Math.Clamp((double)l, 220, 480);
+            if (value is string s && double.TryParse(s, out var d)) return Math.Clamp(d, 220, 480);
+        }
+        catch { }
+        return 320;
+    }
+
+    private static void SaveNavigationPaneLength(double length)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(NavigationPaneLengthValue, (int)Math.Round(Math.Clamp(length, 220, 480)), Microsoft.Win32.RegistryValueKind.DWord);
+        }
+        catch { }
+    }
+
     private void Nav_Loaded(object sender, RoutedEventArgs e)
     {
         if (Nav.MenuItems.Count > 0)
@@ -351,6 +495,10 @@ public sealed class Snapshot
     public long week { get; set; }
     public long month { get; set; }
     public AppStat[] apps { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_week { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_month { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_half_year { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_year { get; set; } = Array.Empty<AppStat>();
     public JsonDaily[] daily { get; set; } = Array.Empty<JsonDaily>();
     public bool locked { get; set; }
     public bool monitor_on { get; set; }
@@ -373,7 +521,46 @@ public sealed class JsonDaily
 
 public static class UiHelpers
 {
-    public static string Format(long s) => $"{s / 3600:00}小时 {(s % 3600) / 60:00}分钟";
+    static readonly Dictionary<string, BitmapImage> AppIconCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static string Format(long s) => Format(s, LanguageMode.Chinese);
+
+    public static string Format(long s, LanguageMode language)
+    {
+        var hours = s / 3600;
+        var minutes = (s % 3600) / 60;
+        return language == LanguageMode.English
+            ? $"{hours:00}h {minutes:00}m"
+            : $"{hours:00}小时 {minutes:00}分钟";
+    }
+
+    public static void SetAppIcon(Microsoft.UI.Xaml.Controls.Image image, AppStat app)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(app.exe_path) || !File.Exists(app.exe_path)) return;
+            if (AppIconCache.TryGetValue(app.exe_path, out var cached))
+            {
+                image.Source = cached;
+                return;
+            }
+
+            using var ico = System.Drawing.Icon.ExtractAssociatedIcon(app.exe_path);
+            if (ico == null) return;
+            var dir = Path.Combine(Path.GetTempPath(), "ScreenTimeRS-icons");
+            Directory.CreateDirectory(dir);
+            var file = Path.Combine(dir, Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(app.exe_path))) + ".png");
+            if (!File.Exists(file))
+                using (var bmp = ico.ToBitmap()) bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+
+            var bitmap = new BitmapImage(new Uri(file));
+            AppIconCache[app.exe_path] = bitmap;
+            image.Source = bitmap;
+        }
+        catch { }
+    }
 
     public static string FriendlyName(AppStat app)
     {
