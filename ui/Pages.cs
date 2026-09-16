@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinUIImage = Microsoft.UI.Xaml.Controls.Image;
@@ -29,6 +30,9 @@ public sealed class OverviewPage : Page
     readonly TextBlock trendSummary;
     readonly Border[] trendBars = new Border[14];
     readonly TextBlock[] trendLabels = new TextBlock[14];
+    readonly Border trendHoverCard;
+    readonly TextBlock trendHoverText;
+    int _hoveredTrendIndex = -1;
     LanguageMode _language = LanguageMode.Chinese;
     Snapshot? _lastSnapshot;
     bool statusClosed;
@@ -73,11 +77,21 @@ public sealed class OverviewPage : Page
             HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollMode = ScrollMode.Disabled
         };
-        var chart = new Grid { Height = 190, ColumnSpacing = 8, MinWidth = 700 };
+
+        var chartHost = new Grid { Height = 190, MinWidth = 784 };
+        var chart = new Grid { Height = 190, ColumnSpacing = 8, MinWidth = 784 };
+        var hoverCanvas = new Canvas { Height = 190, MinWidth = 784, IsHitTestVisible = false };
+
         for (int i = 0; i < 14; i++)
         {
             chart.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-            var day = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Stretch };
+
+            var day = new Grid
+            {
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            var dayContent = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
             var barArea = new Grid { Height = 145, VerticalAlignment = VerticalAlignment.Bottom };
             var bar = new Border
             {
@@ -90,15 +104,49 @@ public sealed class OverviewPage : Page
                 Opacity = .9
             };
             barArea.Children.Add(bar);
+
+            var label = new TextBlock
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FontSize = 11,
+                Opacity = .68
+            };
+            dayContent.Children.Add(barArea);
+            dayContent.Children.Add(label);
+            day.Children.Add(dayContent);
+
+            int dayIndex = i;
+            day.PointerEntered += (_, _) => ShowTrendHover(dayIndex);
+            day.PointerMoved += (_, _) => ShowTrendHover(dayIndex);
+            day.PointerExited += (_, _) => HideTrendHover(dayIndex);
+
             Grid.SetColumn(day, i);
-            var label = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, FontSize = 11, Opacity = .68 };
-            day.Children.Add(barArea);
-            day.Children.Add(label);
             chart.Children.Add(day);
             trendBars[i] = bar;
             trendLabels[i] = label;
         }
-        chartScroll.Content = chart;
+
+        chartHost.Children.Add(chart);
+        trendHoverText = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+            TextWrapping = TextWrapping.NoWrap
+        };
+        trendHoverCard = new Border
+        {
+            Child = trendHoverText,
+            Padding = new Thickness(10, 6, 10, 6),
+            CornerRadius = new CornerRadius(7),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+            BorderThickness = new Thickness(1),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false
+        };
+        hoverCanvas.Children.Add(trendHoverCard);
+        chartHost.Children.Add(hoverCanvas);
+        chartScroll.Content = chartHost;
         trendPanel.Children.Add(chartScroll);
         trendBorder.Child = trendPanel;
         panel.Children.Add(trendBorder);
@@ -157,17 +205,47 @@ public sealed class OverviewPage : Page
                 trendLabels[i].Text = days[i].label;
                 var fraction = Math.Clamp(days[i].seconds / (double)max, 0.0, 1.0);
                 trendBars[i].Height = Math.Max(4, 135 * fraction);
-                ToolTipService.SetToolTip(trendBars[i],
-                    _language == LanguageMode.English
-                        ? $"{days[i].label}: {UiHelpers.Format(days[i].seconds, _language)}"
-                        : $"{days[i].label}：{UiHelpers.Format(days[i].seconds, _language)}");
             }
             else
             {
                 trendLabels[i].Text = "";
                 trendBars[i].Height = 4;
-                ToolTipService.SetToolTip(trendBars[i], _language == LanguageMode.English ? "No usage record" : "暂无使用记录");
             }
+        }
+
+        // The popup is a persistent in-page overlay rather than ToolTipService.
+        // Re-apply it after each data refresh so a visible popup never blinks away.
+        if (_hoveredTrendIndex >= 0)
+            ShowTrendHover(_hoveredTrendIndex);
+    }
+
+    void ShowTrendHover(int index)
+    {
+        if (_lastSnapshot is null || index < 0 || index >= 14) return;
+
+        _hoveredTrendIndex = index;
+        var days = _lastSnapshot.daily.TakeLast(14).ToArray();
+        trendHoverText.Text = index < days.Length
+            ? (_language == LanguageMode.English
+                ? $"{days[index].label}: {UiHelpers.Format(days[index].seconds, _language)}"
+                : $"{days[index].label}：{UiHelpers.Format(days[index].seconds, _language)}")
+            : (_language == LanguageMode.English ? "No usage record" : "暂无使用记录");
+
+        trendHoverCard.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var popupWidth = trendHoverCard.DesiredSize.Width;
+        var left = index * 56.0 + 24.0 - (popupWidth / 2.0);
+        left = Math.Max(4, Math.Min(left, 784 - popupWidth - 4));
+        Canvas.SetLeft(trendHoverCard, left);
+        Canvas.SetTop(trendHoverCard, 4);
+        trendHoverCard.Visibility = Visibility.Visible;
+    }
+
+    void HideTrendHover(int index)
+    {
+        if (_hoveredTrendIndex == index)
+        {
+            _hoveredTrendIndex = -1;
+            trendHoverCard.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -585,8 +663,8 @@ public sealed class SettingsPage : Page
         languageTitle.Text = en ? "Language" : "语言";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.4.0\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.4.0\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.4.1\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.4.1\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
