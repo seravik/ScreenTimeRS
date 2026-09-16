@@ -10,6 +10,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using Microsoft.Win32;
+using UIColor = Windows.UI.Color;
 
 namespace ScreenTimeRS.UI;
 
@@ -98,7 +99,7 @@ public sealed class OverviewPage : Page
                 Width = 24,
                 Height = 4,
                 CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                Background = UiHelpers.AccentBrush(),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Opacity = .9
@@ -153,6 +154,29 @@ public sealed class OverviewPage : Page
 
         Content = new ScrollViewer { Content = panel };
     }
+
+    public void ApplyAccent(UIColor color)
+    {
+        var brush = new SolidColorBrush(color);
+        foreach (var bar in trendBars)
+            bar.Background = brush;
+
+        // InfoBar uses dedicated severity theme resources rather than the
+        // generic accent resources. Override the success-state resources
+        // locally so the "Recording usage time" status follows the selected
+        // application accent instead of staying green.
+        var subtle = new SolidColorBrush(ColorWithAlpha(color, 32));
+        status.Background = subtle;
+        status.Resources["InfoBarSuccessSeverityBackgroundBrush"] = subtle;
+        status.Resources["InfoBarSuccessSeverityIconForeground"] =
+            new SolidColorBrush(Microsoft.UI.Colors.White);
+        status.Resources["SystemFillColorSuccessBrush"] = brush;
+        status.Resources["SystemFillColorSuccessBackgroundBrush"] = subtle;
+        status.Resources["SystemFillColorSolidSuccessBackgroundBrush"] = brush;
+    }
+
+    static UIColor ColorWithAlpha(UIColor color, byte alpha) =>
+        UIColor.FromArgb(alpha, color.R, color.G, color.B);
 
     public void ApplyLanguage(LanguageMode language)
     {
@@ -576,44 +600,136 @@ public sealed class StatsPage : Page
 
 public sealed class SettingsPage : Page
 {
-    readonly CheckBox startup, background;
+    readonly Border startupBox;
+    readonly Grid startupToggle;
+    bool startupEnabled;
     readonly ComboBox theme, language;
-    readonly TextBlock pageTitle, generalTitle, appearanceTitle, aboutTitle, startupText, backgroundText, languageTitle, aboutText;
+    readonly ColorPicker colorPicker;
+    readonly TextBlock pageTitle, generalTitle, appearanceTitle, aboutTitle, startupText, languageTitle, aboutText;
+    readonly TextBlock paletteTitle, customColorTitle, termsTitle, accentHint;
+    readonly Expander themeColorsExpander;
+    readonly Button termsButton;
+    readonly Button[] paletteButtons = new Button[7];
     bool updatingTheme;
     bool updatingLanguage;
+    bool updatingColor;
+    LanguageMode _language;
+    UIColor _accentColor;
 
     public event EventHandler<ThemeMode>? ThemeModeChanged;
     public event EventHandler<LanguageMode>? LanguageChanged;
+    public event EventHandler<UIColor>? AccentColorChanged;
 
-    public SettingsPage(ThemeMode mode, LanguageMode languageMode)
+    public SettingsPage(ThemeMode mode, LanguageMode languageMode, UIColor accentColor)
     {
-        var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        _language = languageMode;
+        _accentColor = accentColor;
+
+        var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         pageTitle = new TextBlock { FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         generalTitle = new TextBlock { FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         p.Children.Add(pageTitle);
         p.Children.Add(generalTitle);
 
-        startup = new CheckBox { IsChecked = StartupEnabled() };
-        startup.Checked += (_, _) => SetStartup(true);
-        startup.Unchecked += (_, _) => SetStartup(false);
-        startupText = new TextBlock();
-        startup.Content = startupText;
-        background = new CheckBox { IsChecked = true };
-        backgroundText = new TextBlock();
-        background.Content = backgroundText;
-        p.Children.Add(startup); p.Children.Add(background);
+        startupEnabled = StartupEnabled();
+        startupText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap
+        };
+        startupBox = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(1.5),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        startupToggle = new Grid
+        {
+            ColumnSpacing = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        startupToggle.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        startupToggle.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(startupBox, 0);
+        Grid.SetColumn(startupText, 1);
+        startupToggle.Children.Add(startupBox);
+        startupToggle.Children.Add(startupText);
+        startupToggle.PointerPressed += (_, _) => ToggleStartup();
+        p.Children.Add(startupToggle);
+        ApplyStartupAccent(_accentColor);
 
         appearanceTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         p.Children.Add(appearanceTitle);
+
         theme = new ComboBox { Width = 240 };
         theme.SelectionChanged += Theme_SelectionChanged;
+        ApplyComboBoxAccent(theme, _accentColor);
         p.Children.Add(theme);
+
+        paletteTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+
+        var palette = new Grid { ColumnSpacing = 10 };
+        for (int i = 0; i < paletteButtons.Length; i++)
+        {
+            palette.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+            var index = i;
+            var button = new Button
+            {
+                Width = 52,
+                Height = 52,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(26),
+                BorderThickness = new Thickness(2),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            button.Click += (_, _) => SelectPreset(index);
+            Grid.SetColumn(button, i);
+            palette.Children.Add(button);
+            paletteButtons[i] = button;
+        }
+
+        customColorTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 0) };
+        accentHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+
+        colorPicker = new ColorPicker
+        {
+            Color = accentColor,
+            IsMoreButtonVisible = true,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        colorPicker.ColorChanged += ColorPicker_ColorChanged;
+
+        var themeContent = new StackPanel { Spacing = 8 };
+        themeContent.Children.Add(paletteTitle);
+        themeContent.Children.Add(palette);
+        themeContent.Children.Add(customColorTitle);
+        themeContent.Children.Add(accentHint);
+        themeContent.Children.Add(colorPicker);
+
+        themeColorsExpander = new Expander
+        {
+            IsExpanded = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Content = themeContent
+        };
+        p.Children.Add(themeColorsExpander);
 
         languageTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         p.Children.Add(languageTitle);
         language = new ComboBox { Width = 240 };
         language.SelectionChanged += Language_SelectionChanged;
+        ApplyComboBoxAccent(language, _accentColor);
         p.Children.Add(language);
+
+        termsTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        p.Children.Add(termsTitle);
+        termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        termsButton.Click += TermsButton_Click;
+        p.Children.Add(termsButton);
 
         aboutTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         p.Children.Add(aboutTitle);
@@ -623,6 +739,7 @@ public sealed class SettingsPage : Page
 
         SetLanguage(languageMode);
         SetThemeMode(mode);
+        UpdatePaletteVisuals();
     }
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -634,12 +751,102 @@ public sealed class SettingsPage : Page
     private void Language_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (updatingLanguage || language.SelectedIndex < 0) return;
-        LanguageChanged?.Invoke(this, (LanguageMode)language.SelectedIndex);
+        _language = (LanguageMode)language.SelectedIndex;
+        LanguageChanged?.Invoke(this, _language);
     }
+
+    private void ColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (updatingColor) return;
+        _accentColor = args.NewColor;
+        UpdatePaletteVisuals();
+        AccentColorChanged?.Invoke(this, _accentColor);
+    }
+
+    private void SelectPreset(int index)
+    {
+        _accentColor = ThemeManager.PresetColors[index];
+        updatingColor = true;
+        colorPicker.Color = _accentColor;
+        updatingColor = false;
+        UpdatePaletteVisuals();
+        AccentColorChanged?.Invoke(this, _accentColor);
+    }
+
+    private void UpdatePaletteVisuals()
+    {
+        for (int i = 0; i < paletteButtons.Length; i++)
+        {
+            var color = ThemeManager.PresetColors[i];
+            paletteButtons[i].Background = new SolidColorBrush(color);
+            paletteButtons[i].BorderBrush = new SolidColorBrush(
+                ThemeManager.IsClose(_accentColor, color) ? Microsoft.UI.Colors.White : UIColor.FromArgb(90, 255, 255, 255));
+            paletteButtons[i].Content = ThemeManager.IsClose(_accentColor, color) ? "✓" : "";
+            paletteButtons[i].Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        }
+    }
+
+    public void ApplyAccent(UIColor color)
+    {
+        _accentColor = color;
+        ApplyStartupAccent(color);
+        ApplyComboBoxAccent(theme, color);
+        ApplyComboBoxAccent(language, color);
+        updatingColor = true;
+        colorPicker.Color = color;
+        updatingColor = false;
+        UpdatePaletteVisuals();
+    }
+
+    void ApplyStartupAccent(UIColor color)
+    {
+        // WinUI 3 CheckBox can keep the system accent inside its materialized
+        // template even after application resources change. Use a tiny
+        // in-page checkbox visual so this specific setting is guaranteed to
+        // follow the same accent color as the rest of the application.
+        var accent = new SolidColorBrush(color);
+        var border = new SolidColorBrush(ColorWithAlpha(color, 255));
+        startupBox.BorderBrush = border;
+        startupBox.Background = startupEnabled ? accent : new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0));
+        startupBox.Child = startupEnabled
+            ? new TextBlock
+            {
+                Text = "✓",
+                FontSize = 17,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+            : null;
+    }
+
+    void ToggleStartup()
+    {
+        startupEnabled = !startupEnabled;
+        SetStartup(startupEnabled);
+        ApplyStartupAccent(_accentColor);
+    }
+
+    static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
+    {
+        var accent = new SolidColorBrush(color);
+        combo.Resources["ComboBoxItemPillFillBrush"] = accent;
+        combo.Resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(ColorWithAlpha(color, 40));
+        combo.Resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(ColorWithAlpha(color, 34));
+        combo.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(ColorWithAlpha(color, 56));
+        combo.Resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(ColorWithAlpha(color, 72));
+        combo.Resources["ComboBoxItemForegroundSelected"] = accent;
+        combo.Resources["ComboBoxItemForegroundSelectedPointerOver"] = accent;
+        combo.Resources["ComboBoxSelectedBackground"] = new SolidColorBrush(ColorWithAlpha(color, 40));
+        combo.Resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(ColorWithAlpha(color, 56));
+    }
+
+    static UIColor ColorWithAlpha(UIColor color, byte alpha) =>
+        UIColor.FromArgb(alpha, color.R, color.G, color.B);
 
     public void SetThemeMode(ThemeMode mode)
     {
-        if (theme.SelectedIndex == (int)mode) return;
         updatingTheme = true;
         theme.SelectedIndex = (int)mode;
         updatingTheme = false;
@@ -647,6 +854,7 @@ public sealed class SettingsPage : Page
 
     public void SetLanguage(LanguageMode mode)
     {
+        _language = mode;
         var en = mode == LanguageMode.English;
         updatingLanguage = true;
         language.Items.Clear();
@@ -658,13 +866,20 @@ public sealed class SettingsPage : Page
         pageTitle.Text = en ? "Settings" : "设置";
         generalTitle.Text = en ? "General" : "常规";
         startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : "登录 Windows 后在后台静默启动";
-        backgroundText.Text = en ? "Continue recording usage time in the background" : "后台继续记录使用时间";
         appearanceTitle.Text = en ? "Appearance" : "外观";
+        themeColorsExpander.Header = en ? "Theme colors & custom color" : "主题色彩与自定义颜色";
+        paletteTitle.Text = en ? "Preset colors" : "预设主题色";
+        customColorTitle.Text = en ? "Custom color" : "自定义颜色";
+        accentHint.Text = en
+            ? "Choose a preset or pick any custom color. Changes apply immediately across the interface."
+            : "选择预设主题色或自由取色，修改后会立即应用到整个界面。";
         languageTitle.Text = en ? "Language" : "语言";
+        termsTitle.Text = en ? "Terms & Privacy" : "使用条款与隐私";
+        termsButton.Content = en ? "View terms and privacy policy" : "查看用户条款与隐私政策";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.4.1\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.4.1\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.5.0\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.5.0\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -681,10 +896,35 @@ public sealed class SettingsPage : Page
             theme.Items.Add("浅色");
             theme.Items.Add("深色");
         }
-        if (themeIndex >= 0 && themeIndex < theme.Items.Count)
-            theme.SelectedIndex = themeIndex;
+        theme.SelectedIndex = Math.Clamp(themeIndex, 0, 2);
         updatingTheme = false;
+        UpdatePaletteVisuals();
     }
+
+    private async void TermsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var en = _language == LanguageMode.English;
+        var dialog = new ContentDialog
+        {
+            Title = en ? "Terms of Use & Privacy" : "用户条款与隐私政策",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 520,
+                Content = new TextBlock
+                {
+                    Text = en ? TermsEnglish : TermsChinese,
+                    TextWrapping = TextWrapping.Wrap,
+                    LineHeight = 22
+                }
+            },
+            CloseButtonText = en ? "Close" : "关闭",
+            XamlRoot = XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.5.0";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.5.0";
 
     static bool StartupEnabled()
     {

@@ -32,7 +32,7 @@
                     <TextBlock x:Name="AppHeaderSubtitle" Text="Windows 使用时间与应用统计" Opacity="0.65" FontSize="12" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="ThemeButton" Click="ThemeButton_Click" Content="主题"/>
+                    <Button x:Name="ThemeButton" Click="ThemeButton_Click" Content="主题" Background="{ThemeResource ScreenTimeAccentBrush}" Foreground="White"/>
                     <Button x:Name="RefreshButton" Click="RefreshButton_Click" Content="刷新"/>
                 </StackPanel>
             </Grid>

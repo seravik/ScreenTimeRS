@@ -1,21 +1,21 @@
-# ScreenTime RS v0.4.1
+# ScreenTime RS v0.5.0
 
 ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具。项目采用 **Rust 监控核心 + WinUI 3 / Fluent UI 原生 Windows 界面**，在本机完成使用时间采集、数据存储和可视化展示。
 
-## v0.4.1 更新
-
-### 修复
-- 修复“概览 → 最近 14 天”时间轴鼠标悬浮提示无法正常显示的问题。
+## v0.5.0 更新
 
 ### 新增
-- 重做“概览 → 最近 14 天”时间轴，鼠标悬浮每日时间条可查看具体使用时长。
-- 支持 Windows 登录后后台静默启动，不自动打开主窗口。
+- 新增“使用条款与隐私政策”，支持中文 / English 双语查看。
+- 新增多组预设主题色，并支持通过 ColorPicker 自定义主题色。
+- 自定义颜色会动态生成 WinUI 的强调色层级，并立即应用到 Fluent UI 控件。
+- 主题色会保存到当前 Windows 用户设置，下次启动自动恢复。
+
+### 移除
+- 移除“设置 → 常规 → 后台继续记录使用时间”选项。
+- 后台采集仍由 Rust 核心独立负责，Windows 登录启动也仍保持静默后台模式。
 
 ### 优化
-- 优化实时页面刷新，减少不必要的 UI 重建。
-- 优化 Rust 后台采集器资源使用与初始化速度。
-- 优化 .NET 发布配置，减少不必要的调试产物。
-- 优化软件启动与运行响应。
+- 延续 v0.4.x 的 14 天趋势悬浮提示、后台静默启动和低资源刷新机制。
 
 ## 项目架构
 
@@ -70,10 +70,10 @@ dist\ui\screentime-rs.exe
 安装程序输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.4.1-Setup.exe
+installer-output\ScreenTimeRS-v0.5.0-Setup.exe
 ```
 
-安装程序使用 Inno Setup 6，并采用当前用户安装方式，不要求管理员权限。安装时可以选择创建桌面快捷方式以及登录 Windows 后自动启动。
+安装程序使用 Inno Setup 6，默认安装到 `C:\Program Files\ScreenTime RS`，因此安装时需要管理员权限。安装时可以选择创建桌面快捷方式以及登录 Windows 后自动启动。
 
 ## 数据位置
 
@@ -104,7 +104,7 @@ HKEY_CURRENT_USER\Software\ScreenTimeRS\NavigationPaneOpen
 当前版本标签：
 
 ```text
-v0.4.1
+v0.5.0
 ```
 
 ## 开源许可
@@ -113,4 +113,4 @@ v0.4.1
 
 ## 当前版本
 
-**v0.4.1**
+**v0.5.0**

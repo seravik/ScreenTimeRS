@@ -3,6 +3,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <SolidColorBrush x:Key="ScreenTimeAccentBrush" Color="#4F8CFF" />
+            <SolidColorBrush x:Key="ScreenTimeAccentSubtleBrush" Color="#334F8CFF" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

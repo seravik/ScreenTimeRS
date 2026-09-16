@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,6 +34,8 @@ public sealed partial class MainWindow : Window
     private const string ThemeModeValue = "ThemeMode";
     private const string LanguageModeValue = "LanguageMode";
     private const string NavigationPaneLengthValue = "NavigationPaneLength";
+    private const string AccentColorValue = "AccentColor";
+    private const string TermsAcceptedValue = "TermsAccepted_v0_5_0";
     private double _savedPaneLength = 320;
     private bool _resizingPane;
     private Snapshot _latestSnapshot = new();
@@ -86,19 +89,21 @@ public sealed partial class MainWindow : Window
 
         _themeMode = LoadThemeMode();
         _languageMode = LoadLanguageMode();
+        var accent = LoadAccentColor();
+        ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
         _appsPage = new AppsPage();
         _statsPage = new StatsPage();
-        _settingsPage = new SettingsPage(_themeMode, _languageMode);
+        _settingsPage = new SettingsPage(_themeMode, _languageMode, accent);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
         _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
+        _settingsPage.AccentColorChanged += SettingsPage_AccentColorChanged;
+        ApplyAccent(accent);
 
         ApplyLanguage(_languageMode);
         ApplyThemeMode(_themeMode, save: false);
         RootGrid.ActualThemeChanged += RootGrid_ActualThemeChanged;
-
-        StartCollector();
 
         Nav.SelectedItem = Nav.MenuItems[0];
         DispatcherQueue.TryEnqueue(() =>
@@ -110,6 +115,7 @@ public sealed partial class MainWindow : Window
             UpdatePages(LoadSnapshot() ?? new Snapshot());
         });
 
+        _ = InitializeAfterConsentAsync();
         _ = RefreshLoop();
     }
 
@@ -132,6 +138,7 @@ public sealed partial class MainWindow : Window
 
     private void RootGrid_ActualThemeChanged(FrameworkElement sender, object args)
     {
+        ApplyAccent(LoadAccentColor());
         ApplyTitleBarTheme();
     }
 
@@ -189,6 +196,7 @@ public sealed partial class MainWindow : Window
         };
 
         _settingsPage?.SetThemeMode(mode);
+        ApplyAccent(LoadAccentColor());
         ApplyTitleBarTheme();
     }
 
@@ -227,6 +235,134 @@ public sealed partial class MainWindow : Window
                 ThemeMode.Dark => "dark",
                 _ => "system"
             });
+        }
+        catch { }
+    }
+
+    private void SettingsPage_AccentColorChanged(object? sender, Color color)
+    {
+        ApplyAccent(color);
+        SaveAccentColor(color);
+        ApplyTitleBarTheme();
+    }
+
+    private void ApplyAccent(Color color)
+    {
+        ThemeManager.ApplyAccent(color);
+        ApplyNavigationAccent(color);
+
+        ThemeButton.Background = new SolidColorBrush(color);
+        ThemeButton.BorderBrush = new SolidColorBrush(color);
+        ThemeButton.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+        _overviewPage?.ApplyAccent(color);
+        _settingsPage?.ApplyAccent(color);
+    }
+
+    private bool _refreshingNavigationTheme;
+
+    private void ApplyNavigationAccent(Color color)
+    {
+        var accentBrush = new SolidColorBrush(color);
+        var selectedBackground = new SolidColorBrush(Color.FromArgb(36, color.R, color.G, color.B));
+        var hoverBackground = new SolidColorBrush(Color.FromArgb(52, color.R, color.G, color.B));
+        var pressedBackground = new SolidColorBrush(Color.FromArgb(72, color.R, color.G, color.B));
+        var lowBrush = new SolidColorBrush(Color.FromArgb(54, color.R, color.G, color.B));
+        var mediumBrush = new SolidColorBrush(Color.FromArgb(90, color.R, color.G, color.B));
+        var highBrush = new SolidColorBrush(Color.FromArgb(145, color.R, color.G, color.B));
+
+        SetNavigationResources(Nav.Resources, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavOverview, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavApps, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavStats, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavSettings, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+
+        // NavigationViewItem keeps its materialized template/resources. Rebuilding
+        // the four existing items is the reliable way to make the selection
+        // indicator and selected foreground pick up the new accent immediately,
+        // without closing the window and without toggling pane state.
+        if (Nav.XamlRoot != null && !_refreshingNavigationTheme)
+        {
+            var selectedTag = (Nav.SelectedItem as NavigationViewItem)?.Tag?.ToString();
+            var paneOpen = Nav.IsPaneOpen;
+            _savedPaneLength = Nav.OpenPaneLength;
+            _refreshingNavigationTheme = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    Nav.MenuItems.Clear();
+                    Nav.MenuItems.Add(NavOverview);
+                    Nav.MenuItems.Add(NavApps);
+                    Nav.MenuItems.Add(NavStats);
+                    Nav.MenuItems.Add(NavSettings);
+                    Nav.OpenPaneLength = _savedPaneLength;
+                    if (!string.IsNullOrWhiteSpace(selectedTag))
+                    {
+                        foreach (var item in Nav.MenuItems)
+                        {
+                            if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
+                            {
+                                Nav.SelectedItem = nvi;
+                                break;
+                            }
+                        }
+                    }
+                    Nav.IsPaneOpen = paneOpen;
+                    Nav.UpdateLayout();
+                }
+                finally
+                {
+                    _refreshingNavigationTheme = false;
+                }
+            });
+        }
+    }
+
+    private static void ApplyNavigationItemResources(
+        NavigationViewItem item,
+        SolidColorBrush accentBrush,
+        SolidColorBrush selectedBackground,
+        SolidColorBrush hoverBackground,
+        SolidColorBrush pressedBackground,
+        SolidColorBrush lowBrush,
+        SolidColorBrush mediumBrush,
+        SolidColorBrush highBrush)
+    {
+        SetNavigationResources(item.Resources, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+    }
+
+    private static void SetNavigationResources(ResourceDictionary resources, SolidColorBrush accentBrush, SolidColorBrush selectedBackground, SolidColorBrush hoverBackground, SolidColorBrush pressedBackground, SolidColorBrush lowBrush, SolidColorBrush mediumBrush, SolidColorBrush highBrush)
+    {
+        resources["NavigationViewSelectionIndicatorForeground"] = accentBrush;
+        resources["NavigationViewItemForegroundSelected"] = accentBrush;
+        resources["NavigationViewItemIconForegroundSelected"] = accentBrush;
+        resources["NavigationViewItemBackgroundSelected"] = selectedBackground;
+        resources["NavigationViewItemBackgroundSelectedPointerOver"] = hoverBackground;
+        resources["NavigationViewItemBackgroundSelectedPressed"] = pressedBackground;
+        resources["SystemControlHighlightListAccentLowBrush"] = lowBrush;
+        resources["SystemControlHighlightListAccentMediumBrush"] = mediumBrush;
+        resources["SystemControlHighlightListAccentHighBrush"] = highBrush;
+    }
+
+    private Color LoadAccentColor()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            var value = key?.GetValue(AccentColorValue) as string;
+            if (ThemeManager.TryParseHex(value, out var color)) return color;
+        }
+        catch { }
+        return ThemeManager.DefaultAccent;
+    }
+
+    private static void SaveAccentColor(Color color)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(AccentColorValue, ThemeManager.ToHex(color));
         }
         catch { }
     }
@@ -282,6 +418,73 @@ public sealed partial class MainWindow : Window
             key?.SetValue(LanguageModeValue, mode == LanguageMode.English ? "en" : "zh-CN");
         }
         catch { }
+    }
+
+    private bool HasAcceptedTerms()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
+            return key?.GetValue(TermsAcceptedValue) is int value && value == 1;
+        }
+        catch { return false; }
+    }
+
+    private void SaveTermsAccepted()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
+            key?.SetValue(TermsAcceptedValue, 1, Microsoft.Win32.RegistryValueKind.DWord);
+        }
+        catch { }
+    }
+
+    private async Task InitializeAfterConsentAsync()
+    {
+        await Task.Delay(120);
+        if (HasAcceptedTerms())
+        {
+            StartCollector();
+            return;
+        }
+
+        var en = _languageMode == LanguageMode.English;
+        var fullText = en
+            ? "TERMS OF USE\n\nVersion: v0.5.0\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.5.0\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
+            : "使用条款\n\n版本：v0.5.0\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.5.0\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+
+        var content = new ScrollViewer
+        {
+            MaxHeight = 500,
+            Content = new TextBlock
+            {
+                Text = fullText,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 22
+            }
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = en ? "Terms of Use & Privacy Policy" : "用户条款与隐私政策",
+            Content = content,
+            PrimaryButtonText = en ? "Accept and Continue" : "同意并继续",
+            CloseButtonText = en ? "Decline and Exit" : "不同意并退出",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = RootGrid.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            SaveTermsAccepted();
+            StartCollector();
+        }
+        else
+        {
+            Close();
+        }
     }
 
     private void StartCollector()
@@ -489,6 +692,7 @@ public sealed partial class MainWindow : Window
 
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (_refreshingNavigationTheme) return;
         ShowSelectedPage();
         UpdateVisiblePage();
     }
@@ -543,6 +747,13 @@ public static class UiHelpers
     static readonly Dictionary<string, BitmapImage> AppIconCache = new(StringComparer.OrdinalIgnoreCase);
 
     public static string Format(long s) => Format(s, LanguageMode.Chinese);
+
+    public static SolidColorBrush AccentBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("ScreenTimeAccentBrush", out var value) && value is SolidColorBrush brush)
+            return brush;
+        return new SolidColorBrush(ThemeManager.DefaultAccent);
+    }
 
     public static string Format(long s, LanguageMode language)
     {
