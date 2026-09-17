@@ -1,8 +1,8 @@
-# ScreenTime RS v0.5.2
+# ScreenTime RS v0.5.3
 
 ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具。项目采用 **Rust 监控核心 + WinUI 3 / Fluent UI 原生 Windows 界面**，在本机完成使用时间采集、数据存储和可视化展示。
 
-## v0.5.2 更新
+## v0.5.3 更新
 
 ### 修复
 - 修复 Settings → Theme colors & custom color 在 English 模式下仍显示中文 ColorPicker 内部文字的问题。
@@ -68,7 +68,7 @@ dist\ui\screentime-rs.exe
 安装程序输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.5.2-Setup.exe
+installer-output\ScreenTimeRS-v0.5.3-Setup.exe
 ```
 
 安装程序使用 Inno Setup 6，默认安装到 `C:\Program Files\ScreenTime RS`，因此安装时需要管理员权限。安装时可以选择创建桌面快捷方式以及登录 Windows 后自动启动。
@@ -102,7 +102,7 @@ HKEY_CURRENT_USER\Software\ScreenTimeRS\NavigationPaneOpen
 当前版本标签：
 
 ```text
-v0.5.2
+v0.5.3
 ```
 
 ## 开源许可
@@ -111,4 +111,4 @@ v0.5.2
 
 ## 当前版本
 
-**v0.5.2**
+**v0.5.3**
