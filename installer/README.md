@@ -1,4 +1,4 @@
-# ScreenTime RS v0.5.0 安装程序
+# ScreenTime RS v0.5.1 安装程序
 
 本安装程序使用 Inno Setup 6 构建。构建前会先编译 Rust 后台采集器，并发布 WinUI 3 前端，然后由 Inno Setup 生成可安装的 Windows x64 EXE。
 
@@ -13,7 +13,7 @@
 输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.5.0-Setup.exe
+installer-output\ScreenTimeRS-v0.5.1-Setup.exe
 ```
 
 安装程序使用管理员权限安装（`PrivilegesRequired=admin`），默认安装到 `C:\Program Files\ScreenTime RS`，支持可选的桌面快捷方式和 Windows 登录后自动启动。

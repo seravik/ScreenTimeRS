@@ -328,6 +328,7 @@ public sealed class AppsPage : Page
     readonly Dictionary<string, AppRow> rows = new(StringComparer.OrdinalIgnoreCase);
     Snapshot snapshot = new();
     LanguageMode _language = LanguageMode.Chinese;
+    UIColor _accentColor = ThemeManager.DefaultAccent;
 
     public AppsPage()
     {
@@ -354,6 +355,7 @@ public sealed class AppsPage : Page
         period.Items.Add("近一年");
         period.SelectedIndex = 0;
         period.SelectionChanged += (_, _) => RenderList();
+        ApplyComboBoxAccent(period, _accentColor);
         Grid.SetColumn(period, 0);
         filters.Children.Add(period);
         search.PlaceholderText = "搜索应用";
@@ -390,6 +392,14 @@ public sealed class AppsPage : Page
         RenderList();
     }
 
+    public void ApplyAccent(UIColor color)
+    {
+        _accentColor = color;
+        ApplyComboBoxAccent(period, color);
+        foreach (var row in rows.Values)
+            row.ApplyAccent(color);
+    }
+
     public void UpdateSnapshot(Snapshot s) { snapshot = s; RenderList(); }
 
     void RenderList()
@@ -410,7 +420,12 @@ public sealed class AppsPage : Page
         }
         foreach (var app in apps) {
             var key = Key(app);
-            if (!rows.TryGetValue(key, out var row)) { row = new AppRow(app, _language); rows[key] = row; }
+            if (!rows.TryGetValue(key, out var row))
+            {
+                row = new AppRow(app, _language, _accentColor);
+                rows[key] = row;
+            }
+            row.ApplyAccent(_accentColor);
             row.Update(app, source.Sum(x => x.seconds), _language);
         }
 
@@ -421,6 +436,20 @@ public sealed class AppsPage : Page
             list.Children.Clear();
             foreach (var item in ordered) list.Children.Add(item);
         }
+    }
+
+    static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
+    {
+        var accent = new SolidColorBrush(color);
+        combo.Resources["ComboBoxItemPillFillBrush"] = accent;
+        combo.Resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
+        combo.Resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(UIColor.FromArgb(34, color.R, color.G, color.B));
+        combo.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
+        combo.Resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(UIColor.FromArgb(72, color.R, color.G, color.B));
+        combo.Resources["ComboBoxItemForegroundSelected"] = accent;
+        combo.Resources["ComboBoxItemForegroundSelectedPointerOver"] = accent;
+        combo.Resources["ComboBoxSelectedBackground"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
+        combo.Resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
     }
 
     static string Key(AppStat a) => string.IsNullOrWhiteSpace(a.exe_path) ? a.name : a.exe_path;
@@ -434,7 +463,7 @@ public sealed class AppsPage : Page
         string iconKey = "";
         static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
-        public AppRow(AppStat app, LanguageMode language)
+        public AppRow(AppStat app, LanguageMode language, UIColor accentColor)
         {
             var grid = new Grid { Padding = new Thickness(10), ColumnSpacing = 14 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
@@ -470,6 +499,17 @@ public sealed class AppsPage : Page
             if (!string.Equals(iconKey, app.exe_path, StringComparison.OrdinalIgnoreCase)) {
                 iconKey = app.exe_path; SetIcon(app);
             }
+        }
+
+        public void ApplyAccent(UIColor color)
+        {
+            var accent = new SolidColorBrush(color);
+            var track = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
+            bar.Foreground = accent;
+            bar.Background = track;
+            bar.Resources["ProgressBarIndicatorForeground"] = accent;
+            bar.Resources["ProgressBarIndicatorForegroundPointerOver"] = accent;
+            bar.Resources["ProgressBarTrackFill"] = track;
         }
 
         void SetIcon(AppStat app)
@@ -539,6 +579,20 @@ public sealed class StatsPage : Page
         topTitle.FontSize = 20; topTitle.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; top.Children.Add(topTitle);
         topBorder.Child = top; p.Children.Add(topBorder);
         Content = new ScrollViewer { Content = p };
+    }
+
+    public void ApplyAccent(UIColor color)
+    {
+        var accent = new SolidColorBrush(color);
+        var track = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
+        foreach (var item in trend)
+        {
+            item.Bar.Foreground = accent;
+            item.Bar.Background = track;
+            item.Bar.Resources["ProgressBarIndicatorForeground"] = accent;
+            item.Bar.Resources["ProgressBarIndicatorForegroundPointerOver"] = accent;
+            item.Bar.Resources["ProgressBarTrackFill"] = track;
+        }
     }
 
     public void ApplyLanguage(LanguageMode language)
@@ -878,7 +932,7 @@ public sealed class SettingsPage : Page
         termsButton.Content = en ? "View terms and privacy policy" : "查看用户条款与隐私政策";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.5.0\nRust monitoring core + WinUI 3 / Fluent UI"
+            ? "ScreenTime RS\nVersion 0.5.1\nRust monitoring core + WinUI 3 / Fluent UI"
             : "ScreenTime RS\n版本 0.5.0\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
@@ -923,8 +977,8 @@ public sealed class SettingsPage : Page
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.5.0";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.5.0";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.5.1";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.5.1";
 
     static bool StartupEnabled()
     {

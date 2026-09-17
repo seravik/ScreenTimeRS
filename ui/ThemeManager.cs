@@ -71,6 +71,9 @@ public static class ThemeManager
         resources["RadioButtonOuterEllipseCheckedFill"] = accentBrush;
         resources["ToggleSwitchFillOn"] = accentBrush;
         resources["SliderTrackValueFill"] = accentBrush;
+        resources["ProgressBarIndicatorForeground"] = accentBrush;
+        resources["ProgressBarIndicatorForegroundPointerOver"] = accentBrush;
+        resources["ProgressBarTrackFill"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
 
         // ComboBox popup/selection resources. Without these the drop-down
         // can keep the Windows default blue accent even when the app accent
