@@ -1,47 +1,27 @@
-# 更新日志
-
-## v0.5.1
-- 新增“应用主题”按钮，可在不重启程序的情况下重新应用当前主题色，修复导航栏等控件在动态换色后视觉状态不同步的问题。
-
-### 本次修复与调整
-- 修复自定义主题色无法在整个界面稳定生效的问题，统一同步导航栏、主题按钮、最近 14 天时间轴等界面区域。
-- 主题色彩与自定义颜色设置改为可展开/收起的折叠区域，默认收起，减少设置页面干扰。
-- 新增首次使用同意确认：首次启动显示《用户条款与隐私政策》，选择“同意并继续”后进入软件；选择“不同意并退出”则退出。
-
-### 新增
-- 新增“使用条款与隐私政策”，支持中文 / English 双语查看。
-- 新增多组预设主题色，并支持 ColorPicker 自定义主题色。
-- 自定义主题色会动态生成 WinUI 强调色层级，并立即应用到界面。
-- 主题色设置会保存并在下次启动时恢复。
-
-### 移除
-- 移除“设置 → 常规 → 后台继续记录使用时间”选项，避免与实际后台采集机制混淆。
-
-### 优化
-- 保留 Rust 后台核心与 WinUI 3 / Fluent UI 前端架构，不需要重写现有 UI 技术栈。
-- 延续 Windows 登录后后台静默启动机制。
-
-## v0.3.0
-
-### 新增
-- 设置页面新增“语言”选项，支持中文 / English 切换并自动保存选择
-- 切换语言后，导航栏、顶部操作区以及主要页面内容会即时同步更新
-- 优化“概览 → 最近 14 天”，鼠标悬浮时间条可查看具体使用时长
-- “应用使用时间”新增今天、本周、本月、近半年、近一年数据切换
-- “统计 → 今日应用排行”新增应用图标显示
-- 左侧导航栏支持鼠标拖动调整宽度，并自动保存上次宽度
-- 安装程序支持中文与英文界面，并调整默认安装位置
-
-## v0.2.6
-
-- 修复自定义标题栏图标未显示的问题
-### 修复
-- 修复设置页面主题切换状态异常的问题
-- 修复跟随系统主题时标题栏颜色不一致的问题
-- 修复自定义标题栏重复显示应用名称的问题
-- 修复标题栏图标与文字垂直对齐问题
-
 # Changelog
+
+
+### v0.5.2 — Build correction
+- Fixed `CS0104/CS0019` build errors in `Pages.cs` related to ambiguous point/input API types.
+- Fixed the nullable initialization warning for the `ColorPicker` field.
+- Hardened pointer release handling so only an active left-button drag/click can commit a color.
+
+### v0.5.2 — ColorPicker localization stability fix
+- 修复 WinUI 3 项目在 `Pages.cs` 中 `Point` 类型与 `System.Drawing.Point` 产生的编译歧义。
+- 移除旧的原生 ColorSpectrum ToolTip 方案，改为应用自有悬浮颜色昵称层；悬浮显示名称，左键点击/拖动直接选择颜色。
+- 不再修改或清理 ColorPicker 内部 ToolTip，也不让 ColorSpectrum 接收实际指针输入，避免系统中文颜色名称与自定义提示并存。
+- 保持语言切换不重启、不退出，版本仍为 v0.5.2。
+
+
+## v0.5.2
+
+### Fixed
+- Replaced the native ColorSpectrum color-name tooltip with an application-owned hover label.
+- Hover only previews the localized color name; left-click/drag commits the selected color through the existing ColorPicker.Color pipeline.
+- The native ColorSpectrum is kept for rendering, but pointer input is intercepted by a transparent surface so no second system tooltip can appear.
+- Simplified runtime language switching: no process-wide language override, no ColorPicker recreation, and no application restart/exit when changing language or color.
+- Kept ColorPicker color selection, sliders, and text inputs on the native control while localizing its visible labels in place.
+- Removed unused bundled font/release-note/dev-profile files from the source package to reduce distribution size.
 
 ## v0.2.5 — 2026-09-15
 

@@ -1,9 +1,0 @@
-Noto Sans CJK SC
-
-Copyright 2014-2022 The Noto Project Authors (https://github.com/notofonts/noto-cjk)
-
-This font is licensed under the SIL Open Font License, Version 1.1.
-See https://openfontlicense.org for the full license text.
-
-The font is bundled with ScreenTime RS solely to provide reliable Simplified Chinese
-rendering in the desktop GUI.

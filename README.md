@@ -1,21 +1,19 @@
-# ScreenTime RS v0.5.1
+# ScreenTime RS v0.5.2
 
 ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具。项目采用 **Rust 监控核心 + WinUI 3 / Fluent UI 原生 Windows 界面**，在本机完成使用时间采集、数据存储和可视化展示。
 
-## v0.5.1 更新
+## v0.5.2 更新
 
-### 新增
-- 新增“使用条款与隐私政策”，支持中文 / English 双语查看。
-- 新增多组预设主题色，并支持通过 ColorPicker 自定义主题色。
-- 自定义颜色会动态生成 WinUI 的强调色层级，并立即应用到 Fluent UI 控件。
-- 主题色会保存到当前 Windows 用户设置，下次启动自动恢复。
+### 修复
+- 修复 Settings → Theme colors & custom color 在 English 模式下仍显示中文 ColorPicker 内部文字的问题。
+- 修复 ColorSpectrum 同时出现系统原生颜色名称与应用自定义颜色提示的问题。
+- 中英文均统一使用应用自有颜色昵称；鼠标悬浮显示昵称，左键点击/拖动选择颜色。
+- 修复语言切换或重新选择颜色时应用可能退出的问题。
 
-### 移除
-- 移除“设置 → 常规 → 后台继续记录使用时间”选项。
-- 后台采集仍由 Rust 核心独立负责，Windows 登录启动也仍保持静默后台模式。
-
-### 优化
-- 延续 v0.4.x 的 14 天趋势悬浮提示、后台静默启动和低资源刷新机制。
+### 实现
+- 保留 WinUI 3 原生 `ColorPicker`，在现有控件上更新语言和可见标签，不重建 ColorPicker。
+- 移除运行时的全局 `ApplicationLanguages.PrimaryLanguageOverride` 和 ColorPicker 重建路径，避免影响整个进程的资源状态。
+- ColorSpectrum 改为使用应用自己的悬浮颜色昵称层：透明交互面承接鼠标事件，悬浮显示本地化颜色名称，左键点击/拖动更新实际颜色，完全绕开系统原生颜色名称提示。
 
 ## 项目架构
 
@@ -70,7 +68,7 @@ dist\ui\screentime-rs.exe
 安装程序输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.5.1-Setup.exe
+installer-output\ScreenTimeRS-v0.5.2-Setup.exe
 ```
 
 安装程序使用 Inno Setup 6，默认安装到 `C:\Program Files\ScreenTime RS`，因此安装时需要管理员权限。安装时可以选择创建桌面快捷方式以及登录 Windows 后自动启动。
@@ -104,7 +102,7 @@ HKEY_CURRENT_USER\Software\ScreenTimeRS\NavigationPaneOpen
 当前版本标签：
 
 ```text
-v0.5.1
+v0.5.2
 ```
 
 ## 开源许可
@@ -113,4 +111,4 @@ v0.5.1
 
 ## 当前版本
 
-**v0.5.1**
+**v0.5.2**

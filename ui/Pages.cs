@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -237,8 +238,7 @@ public sealed class OverviewPage : Page
             }
         }
 
-        // The popup is a persistent in-page overlay rather than ToolTipService.
-        // Re-apply it after each data refresh so a visible popup never blinks away.
+        // Re-apply the in-page overlay after each refresh so a visible popup never blinks away.
         if (_hoveredTrendIndex >= 0)
             ShowTrendHover(_hoveredTrendIndex);
     }
@@ -658,12 +658,19 @@ public sealed class SettingsPage : Page
     readonly Grid startupToggle;
     bool startupEnabled;
     readonly ComboBox theme, language;
-    readonly ColorPicker colorPicker;
+    ColorPicker colorPicker = null!;
     readonly TextBlock pageTitle, generalTitle, appearanceTitle, aboutTitle, startupText, languageTitle, aboutText;
     readonly TextBlock paletteTitle, customColorTitle, termsTitle, accentHint;
     readonly Expander themeColorsExpander;
+    readonly StackPanel themeContent;
+    readonly Grid colorPickerHost;
+    readonly Border colorSpectrumInputSurface;
+    readonly Border colorSpectrumTooltip;
+    readonly TextBlock colorSpectrumTooltipText;
     readonly Button termsButton;
     readonly Button[] paletteButtons = new Button[7];
+    ColorSpectrum? colorSpectrum;
+    bool colorSpectrumPointerDown;
     bool updatingTheme;
     bool updatingLanguage;
     bool updatingColor;
@@ -749,20 +756,58 @@ public sealed class SettingsPage : Page
         customColorTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 0) };
         accentHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
 
-        colorPicker = new ColorPicker
-        {
-            Color = accentColor,
-            IsMoreButtonVisible = true,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        colorPicker.ColorChanged += ColorPicker_ColorChanged;
+        themeContent = new StackPanel { Spacing = 8 };
 
-        var themeContent = new StackPanel { Spacing = 8 };
+        colorPickerHost = new Grid();
+        colorSpectrumInputSurface = new Border
+        {
+            Background = new SolidColorBrush(UIColor.FromArgb(1, 255, 255, 255)),
+            BorderThickness = new Thickness(0),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = true,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Width = 0,
+            Height = 0
+        };
+        colorSpectrumInputSurface.PointerEntered += ColorSpectrumInput_PointerEntered;
+        colorSpectrumInputSurface.PointerMoved += ColorSpectrumInput_PointerMoved;
+        colorSpectrumInputSurface.PointerPressed += ColorSpectrumInput_PointerPressed;
+        colorSpectrumInputSurface.PointerReleased += ColorSpectrumInput_PointerReleased;
+        colorSpectrumInputSurface.PointerExited += ColorSpectrumInput_PointerExited;
+        colorSpectrumInputSurface.PointerCaptureLost += ColorSpectrumInput_PointerCaptureLost;
+
+        colorSpectrumTooltipText = new TextBlock
+        {
+            FontSize = 18,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        colorSpectrumTooltip = new Border
+        {
+            Background = new SolidColorBrush(UIColor.FromArgb(248, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(UIColor.FromArgb(80, 120, 120, 120)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 9, 16, 9),
+            MinWidth = 78,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = colorSpectrumTooltipText,
+            RenderTransform = new TranslateTransform()
+        };
+
+        colorPickerHost.Children.Add(colorSpectrumInputSurface);
+        colorPickerHost.Children.Add(colorSpectrumTooltip);
+        CreateColorPicker();
+
         themeContent.Children.Add(paletteTitle);
         themeContent.Children.Add(palette);
         themeContent.Children.Add(customColorTitle);
         themeContent.Children.Add(accentHint);
-        themeContent.Children.Add(colorPicker);
+        themeContent.Children.Add(colorPickerHost);
 
         themeColorsExpander = new Expander
         {
@@ -794,6 +839,292 @@ public sealed class SettingsPage : Page
         SetLanguage(languageMode);
         SetThemeMode(mode);
         UpdatePaletteVisuals();
+        LocalizeColorPickerText();
+    }
+
+    private void CreateColorPicker()
+    {
+        colorPicker = new ColorPicker
+        {
+            Color = _accentColor,
+            IsMoreButtonVisible = true,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            ColorSpectrumComponents = ColorSpectrumComponents.HueSaturation,
+            Language = _language == LanguageMode.English ? "en-US" : "zh-CN"
+        };
+
+        colorPickerHost.Children.Insert(0, colorPicker);
+        colorPicker.ColorChanged += ColorPicker_ColorChanged;
+        colorPicker.Loaded += (_, _) =>
+        {
+            LocalizeColorPickerText();
+            BindColorSpectrumInteraction();
+        };
+        colorPicker.SizeChanged += (_, _) =>
+        {
+            LocalizeColorPickerText();
+            UpdateColorSpectrumInteractionBounds();
+        };
+    }
+
+    private void BindColorSpectrumInteraction()
+    {
+        var spectrum = FindVisualChild<ColorSpectrum>(colorPicker);
+        if (spectrum is null) return;
+
+        if (!ReferenceEquals(colorSpectrum, spectrum))
+        {
+            if (colorSpectrum is not null)
+                colorSpectrum.SizeChanged -= ColorSpectrum_SizeChanged;
+
+            colorSpectrum = spectrum;
+            colorSpectrum.IsHitTestVisible = false;
+            colorSpectrum.SizeChanged += ColorSpectrum_SizeChanged;
+        }
+
+        UpdateColorSpectrumInteractionBounds();
+    }
+
+    private void ColorSpectrum_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateColorSpectrumInteractionBounds();
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? root) where T : DependencyObject
+    {
+        if (root is null) return null;
+        if (root is T match) return match;
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var found = FindVisualChild<T>(VisualTreeHelper.GetChild(root, i));
+            if (found is not null) return found;
+        }
+        return null;
+    }
+
+    private void UpdateColorSpectrumInteractionBounds()
+    {
+        if (colorSpectrum is null || !colorSpectrum.IsLoaded || colorSpectrum.ActualWidth <= 1 || colorSpectrum.ActualHeight <= 1)
+        {
+            colorSpectrumInputSurface.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        try
+        {
+            var origin = colorSpectrum.TransformToVisual(colorPickerHost)
+                .TransformPoint(new Windows.Foundation.Point(0, 0));
+
+            colorSpectrumInputSurface.Margin = new Thickness(origin.X, origin.Y, 0, 0);
+            colorSpectrumInputSurface.Width = colorSpectrum.ActualWidth;
+            colorSpectrumInputSurface.Height = colorSpectrum.ActualHeight;
+            colorSpectrumInputSurface.Visibility = Visibility.Visible;
+        }
+        catch
+        {
+            colorSpectrumInputSurface.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ColorSpectrumInput_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        UpdateSpectrumPointer(e, commit: false);
+    }
+
+    private void ColorSpectrumInput_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        UpdateSpectrumPointer(e, commit: colorSpectrumPointerDown);
+
+        var point = e.GetCurrentPoint(colorSpectrumInputSurface);
+        if (colorSpectrumPointerDown || point.Properties.IsLeftButtonPressed)
+            e.Handled = true;
+    }
+
+    private void ColorSpectrumInput_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(colorSpectrumInputSurface);
+        if (!point.Properties.IsLeftButtonPressed) return;
+
+        colorSpectrumPointerDown = true;
+        colorSpectrumInputSurface.CapturePointer(e.Pointer);
+        UpdateSpectrumPointer(e, commit: true);
+        e.Handled = true;
+    }
+
+    private void ColorSpectrumInput_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        // Only a pointer sequence started by our left-button handler may commit
+        // a color. This also prevents right-click release events from selecting.
+        if (colorSpectrumPointerDown)
+            UpdateSpectrumPointer(e, commit: true);
+
+        colorSpectrumPointerDown = false;
+        colorSpectrumInputSurface.ReleasePointerCaptures();
+        e.Handled = true;
+    }
+
+    private void ColorSpectrumInput_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (!colorSpectrumPointerDown)
+            HideColorSpectrumTooltip();
+    }
+
+    private void ColorSpectrumInput_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        colorSpectrumPointerDown = false;
+        HideColorSpectrumTooltip();
+    }
+
+    private void UpdateSpectrumPointer(PointerRoutedEventArgs e, bool commit)
+    {
+        if (colorSpectrum is null || colorSpectrum.ActualWidth <= 1 || colorSpectrum.ActualHeight <= 1)
+            return;
+
+        var point = e.GetCurrentPoint(colorSpectrumInputSurface).Position;
+        point = new Windows.Foundation.Point(
+            Math.Clamp(point.X, 0, colorSpectrumInputSurface.ActualWidth),
+            Math.Clamp(point.Y, 0, colorSpectrumInputSurface.ActualHeight));
+
+        var hue = point.X / colorSpectrumInputSurface.ActualWidth * 360.0;
+        var saturation = 1.0 - point.Y / colorSpectrumInputSurface.ActualHeight;
+        var text = GetLocalizedSpectrumColorName(hue, saturation, 1.0, _language);
+
+        colorSpectrumTooltipText.Text = text;
+        colorSpectrumTooltip.Visibility = Visibility.Visible;
+        PositionColorSpectrumTooltip(point);
+
+        if (commit)
+        {
+            var selected = HsvToColor(hue, saturation, 1.0);
+            if (!ColorsEqual(colorPicker.Color, selected))
+                colorPicker.Color = selected;
+        }
+    }
+
+    private void PositionColorSpectrumTooltip(Windows.Foundation.Point point)
+    {
+        if (colorSpectrum is null || colorSpectrumTooltip.Visibility != Visibility.Visible)
+            return;
+
+        var tooltipOffsetX = 16.0;
+        var tooltipOffsetY = 16.0;
+        var x = point.X + tooltipOffsetX;
+        var y = point.Y + tooltipOffsetY;
+
+        colorSpectrumTooltip.Measure(new Windows.Foundation.Size(
+            double.PositiveInfinity, double.PositiveInfinity));
+        var size = colorSpectrumTooltip.DesiredSize;
+        var maxX = Math.Max(0, colorSpectrumInputSurface.ActualWidth - size.Width);
+        var maxY = Math.Max(0, colorSpectrumInputSurface.ActualHeight - size.Height);
+        x = Math.Clamp(x, 0, maxX);
+        y = Math.Clamp(y, 0, maxY);
+
+        if (colorSpectrumTooltip.RenderTransform is TranslateTransform transform)
+        {
+            transform.X = x;
+            transform.Y = y;
+        }
+    }
+
+    private void HideColorSpectrumTooltip()
+    {
+        colorSpectrumTooltip.Visibility = Visibility.Collapsed;
+    }
+
+    private static bool ColorsEqual(UIColor left, UIColor right) =>
+        left.A == right.A && left.R == right.R && left.G == right.G && left.B == right.B;
+
+    private static UIColor HsvToColor(double hue, double saturation, double value)
+    {
+        hue = ((hue % 360) + 360) % 360;
+        saturation = Math.Clamp(saturation, 0, 1);
+        value = Math.Clamp(value, 0, 1);
+
+        var c = value * saturation;
+        var x = c * (1 - Math.Abs((hue / 60.0 % 2) - 1));
+        var m = value - c;
+        double r, g, b;
+
+        if (hue < 60) (r, g, b) = (c, x, 0);
+        else if (hue < 120) (r, g, b) = (x, c, 0);
+        else if (hue < 180) (r, g, b) = (0, c, x);
+        else if (hue < 240) (r, g, b) = (0, x, c);
+        else if (hue < 300) (r, g, b) = (x, 0, c);
+        else (r, g, b) = (c, 0, x);
+
+        return UIColor.FromArgb(
+            255,
+            (byte)Math.Round((r + m) * 255),
+            (byte)Math.Round((g + m) * 255),
+            (byte)Math.Round((b + m) * 255));
+    }
+
+    private static string GetLocalizedSpectrumColorName(double hue, double saturation, double value, LanguageMode language)
+    {
+        var english = language == LanguageMode.English;
+        if (value < 0.16) return english ? "Black" : "黑色";
+        if (saturation < 0.08)
+            return value > 0.85 ? (english ? "White" : "白色") : (english ? "Gray" : "灰色");
+        if (hue < 15 || hue >= 345) return english ? "Red" : "红色";
+        if (hue < 45) return english ? "Orange" : "橙色";
+        if (hue < 75) return english ? "Yellow" : "黄色";
+        if (hue < 165) return english ? "Green" : "绿色";
+        if (hue < 195) return english ? "Cyan" : "青色";
+        if (hue < 255) return english ? "Blue" : "蓝色";
+        if (hue < 285) return english ? "Purple" : "紫色";
+        if (hue < 330) return english ? "Magenta" : "洋红色";
+        return english ? "Pink" : "粉色";
+    }
+
+    private void LocalizeColorPickerText()
+    {
+        if (colorPicker is null) return;
+
+        var english = _language == LanguageMode.English;
+        colorPicker.Language = english ? "en-US" : "zh-CN";
+        var labels = english
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["更多"] = "More", ["更少"] = "Less", ["红色"] = "Red", ["绿色"] = "Green",
+                ["蓝色"] = "Blue", ["青色"] = "Cyan", ["紫色"] = "Purple", ["洋红色"] = "Magenta",
+                ["粉色"] = "Pink", ["橙色"] = "Orange", ["黄色"] = "Yellow", ["白色"] = "White", ["灰色"] = "Gray",
+                ["黑色"] = "Black", ["浅蓝色"] = "Light blue", ["浅绿色"] = "Light green",
+                ["色调"] = "Hue", ["饱和度"] = "Saturation", ["值"] = "Value",
+                ["透明度"] = "Alpha", ["十六进制"] = "Hex", ["颜色"] = "Color"
+            }
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["More"] = "更多", ["Less"] = "更少", ["Red"] = "红色", ["Green"] = "绿色",
+                ["Blue"] = "蓝色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋红色",
+                ["Pink"] = "粉色", ["Orange"] = "橙色", ["Yellow"] = "黄色", ["White"] = "白色", ["Gray"] = "灰色",
+                ["Black"] = "黑色", ["Light blue"] = "浅蓝色", ["Light green"] = "浅绿色",
+                ["Hue"] = "色调", ["Saturation"] = "饱和度", ["Value"] = "值",
+                ["Alpha"] = "透明度", ["Hex"] = "十六进制", ["Color"] = "颜色"
+            };
+
+        ReplaceColorPickerStrings(colorPicker, labels);
+    }
+
+    static void ReplaceColorPickerStrings(DependencyObject root, Dictionary<string, string> labels)
+    {
+        if (root is TextBlock textBlock)
+        {
+            var text = textBlock.Text?.Trim();
+            if (!string.IsNullOrEmpty(text) && labels.TryGetValue(text, out var translated))
+                textBlock.Text = translated;
+        }
+        else if (root is ContentControl contentControl && contentControl.Content is string content)
+        {
+            var text = content.Trim();
+            if (!string.IsNullOrEmpty(text) && labels.TryGetValue(text, out var translated))
+                contentControl.Content = translated;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+            ReplaceColorPickerStrings(VisualTreeHelper.GetChild(root, i), labels);
     }
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -850,6 +1181,7 @@ public sealed class SettingsPage : Page
         colorPicker.Color = color;
         updatingColor = false;
         UpdatePaletteVisuals();
+        BindColorSpectrumInteraction();
     }
 
     void ApplyStartupAccent(UIColor color)
@@ -932,8 +1264,8 @@ public sealed class SettingsPage : Page
         termsButton.Content = en ? "View terms and privacy policy" : "查看用户条款与隐私政策";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.5.1\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.5.0\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.5.2\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.5.2\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -953,6 +1285,9 @@ public sealed class SettingsPage : Page
         theme.SelectedIndex = Math.Clamp(themeIndex, 0, 2);
         updatingTheme = false;
         UpdatePaletteVisuals();
+        LocalizeColorPickerText();
+        BindColorSpectrumInteraction();
+        HideColorSpectrumTooltip();
     }
 
     private async void TermsButton_Click(object sender, RoutedEventArgs e)
@@ -977,8 +1312,8 @@ public sealed class SettingsPage : Page
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.5.1";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.5.1";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.5.2";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.5.2";
 
     static bool StartupEnabled()
     {
