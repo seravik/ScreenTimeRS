@@ -1,4 +1,4 @@
-# ScreenTime RS v0.6.1 安装程序
+# ScreenTime RS v0.6.2 安装程序
 
 构建项目根目录：
 
@@ -9,7 +9,7 @@
 输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.6.1-Setup.exe
+installer-output\ScreenTimeRS-v0.6.2-Setup.exe
 ```
 
 安装程序支持桌面快捷方式、开始菜单快捷方式以及登录 Windows 后自动启动。

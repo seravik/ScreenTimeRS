@@ -51,9 +51,7 @@ public sealed class OverviewPage : Page
         AddCard(cards, 1, out values[1], out cardTitles[1], out cardSubs[1]);
         AddCard(cards, 2, out values[2], out cardTitles[2], out cardSubs[2]);
         AddCard(cards, 3, out values[3], out cardTitles[3], out cardSubs[3]);
-        cards.SizeChanged += (_, e) => UpdateCardLayout(cards, e.NewSize.Width);
         panel.Children.Add(cards);
-        UpdateCardLayout(cards, 1000);
 
         status = new InfoBar { IsOpen = true, IsClosable = true };
         status.Closed += (_, _) => statusClosed = true;
@@ -301,7 +299,12 @@ public sealed class OverviewPage : Page
             BorderThickness = new Thickness(1)
         };
         var p = new StackPanel { Spacing = 5 };
-        title = new TextBlock { Opacity = .65 };
+        title = new TextBlock
+        {
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None
+        };
         p.Children.Add(title);
         value = new TextBlock
         {
@@ -313,28 +316,17 @@ public sealed class OverviewPage : Page
             MinHeight = 34
         };
         p.Children.Add(value);
-        sub = new TextBlock { Opacity = .6, FontSize = 12 };
+        sub = new TextBlock
+        {
+            Opacity = .6,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None
+        };
         p.Children.Add(sub);
         b.Child = p; Grid.SetColumn(b, col); g.Children.Add(b);
     }
 
-    static void UpdateCardLayout(Grid g, double width)
-    {
-        int columns = width >= 900 ? 4 : width >= 560 ? 2 : 1;
-        int rows = (4 + columns - 1) / columns;
-        while (g.RowDefinitions.Count < rows)
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        while (g.RowDefinitions.Count > rows)
-            g.RowDefinitions.RemoveAt(g.RowDefinitions.Count - 1);
-        for (int i = 0; i < g.Children.Count; i++)
-        {
-            if (g.Children[i] is FrameworkElement element)
-            {
-                Grid.SetColumn(element, i % columns);
-                Grid.SetRow(element, i / columns);
-            }
-        }
-    }
 }
 
 public sealed class AppsPage : Page
@@ -1007,7 +999,12 @@ public sealed class StatsPage : Page
             BorderThickness = new Thickness(1)
         };
         var p = new StackPanel { Spacing = 5 };
-        title = new TextBlock { Opacity = .65 };
+        title = new TextBlock
+        {
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None
+        };
         p.Children.Add(title);
         value = new TextBlock
         {
@@ -1666,8 +1663,8 @@ public sealed class SettingsPage : Page
         termsButton.Content = en ? "View terms and privacy policy" : "查看用户条款与隐私政策";
         aboutTitle.Text = en ? "About" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.6.1\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.6.1\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.6.2\nRust monitoring core + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.6.2\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -1714,8 +1711,8 @@ public sealed class SettingsPage : Page
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.6.1";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.6.1";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.6.2";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.6.2";
 
     static bool StartupEnabled()
     {
