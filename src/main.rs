@@ -7,7 +7,7 @@ use directories::ProjectDirs;
 use rusqlite::{params, Connection};
 use std::{sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use sysinfo::{Pid, ProcessesToUpdate, System};
-use tray_icon::{menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem}, Icon, TrayIconBuilder};
+use tray_icon::{menu::{Icon as MenuIcon, IconMenuItem, Menu, MenuEvent, PredefinedMenuItem}, Icon, TrayIconBuilder, TrayIconEvent, MouseButton};
 
 #[cfg(windows)]
 use windows::Win32::{
@@ -510,14 +510,56 @@ impl Collector {
     }
 }
 
-fn tray_icon()->Icon {
-    let mut rgba=Vec::with_capacity(32*32*4);
-    for y in 0..32 { for x in 0..32 {
-        let dx=x as i32-16; let dy=y as i32-16;
-        let on=dx*dx+dy*dy<13*13;
-        rgba.extend_from_slice(if on { &[45,145,220,255] } else { &[0,0,0,0] });
-    }}
-    Icon::from_rgba(rgba,32,32).unwrap()
+fn tray_icon_rgba() -> Vec<u8> {
+    // Compact monitor glyph matching the ScreenTime RS application identity.
+    let mut rgba=vec![0u8; 32*32*4];
+    let set = |rgba: &mut Vec<u8>, x: usize, y: usize, color: [u8;4]| {
+        if x < 32 && y < 32 {
+            let i = (y*32 + x)*4;
+            rgba[i..i+4].copy_from_slice(&color);
+        }
+    };
+
+    let blue = [31, 149, 229, 255];
+    let dark = [34, 42, 52, 255];
+
+    // Rounded monitor frame.
+    for y in 5..23 {
+        for x in 5..27 {
+            let edge = y == 5 || y == 22 || x == 5 || x == 26;
+            let corner = (x == 5 || x == 26) && (y == 5 || y == 6 || y == 21 || y == 22);
+            if edge && !corner {
+                set(&mut rgba, x, y, blue);
+            }
+        }
+    }
+    for y in 7..21 {
+        for x in 7..25 {
+            set(&mut rgba, x, y, dark);
+        }
+    }
+
+    // Stand and base.
+    for y in 23..27 {
+        for x in 14..18 {
+            set(&mut rgba, x, y, blue);
+        }
+    }
+    for y in 27..29 {
+        for x in 11..21 {
+            set(&mut rgba, x, y, blue);
+        }
+    }
+
+    rgba
+}
+
+fn tray_icon() -> Icon {
+    Icon::from_rgba(tray_icon_rgba(), 32, 32).unwrap()
+}
+
+fn tray_menu_icon() -> MenuIcon {
+    MenuIcon::from_rgba(tray_icon_rgba(), 32, 32).unwrap()
 }
 
 fn launch_ui() {
@@ -628,8 +670,8 @@ fn main()->Result<()> {
     Collector::start(db.clone(), snap.clone());
 
     let menu=Menu::new();
-    let show=MenuItem::new("打开 ScreenTime RS",true,None);
-    let quit=MenuItem::new("退出 ScreenTime RS",true,None);
+    let show=IconMenuItem::new("ScreenTime RS", true, Some(tray_menu_icon()), None);
+    let quit=tray_icon::menu::MenuItem::new("退出",true,None);
     menu.append(&show)?;
     menu.append(&PredefinedMenuItem::separator())?;
     menu.append(&quit)?;
@@ -637,12 +679,13 @@ fn main()->Result<()> {
     // Keep the tray object alive for the entire process lifetime.
     // Explicitly disable left-click menu behavior so the standard Windows
     // right-click context menu always contains the two actions above.
-    let _tray=TrayIconBuilder::new()
+    let tray=TrayIconBuilder::new()
         .with_icon(tray_icon())
         .with_tooltip(APP_NAME)
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .build()?;
+    let tray_id=tray.id().clone();
     let show_id=show.id().clone();
     let quit_id=quit.id().clone();
 
@@ -658,6 +701,15 @@ fn main()->Result<()> {
             while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
+            }
+        }
+
+        while let Ok(e)=TrayIconEvent::receiver().try_recv() {
+            #[cfg(windows)]
+            if let TrayIconEvent::DoubleClick { id, button: MouseButton::Left, .. } = e {
+                if id == tray_id {
+                    launch_ui();
+                }
             }
         }
 

@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:ScreenTimeRS.UI"
     mc:Ignorable="d">
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
@@ -35,35 +36,19 @@
                 <Frame x:Name="ContentFrame"/>
             </NavigationView>
 
-            <!-- Invisible resize hit area on the navigation pane edge. The grip
-                 appears only while the pointer is over the resize area or dragging. -->
+            <!-- Invisible full-height resize hit area on the navigation pane edge.
+                 The standard horizontal-resize cursor is the only visual cue. -->
             <Canvas x:Name="NavResizeCanvas" IsHitTestVisible="True">
-                <Border x:Name="NavResizeHandle"
-                        Width="10"
-                        Height="72"
-                        CornerRadius="5"
+                <local:NavigationResizeHandle x:Name="NavResizeHandle"
+                        Width="22"
+                        Height="1"
                         Background="Transparent"
                         HorizontalAlignment="Left"
-                        VerticalAlignment="Top"
-                        PointerEntered="NavResizeHandle_PointerEntered"
-                        PointerExited="NavResizeHandle_PointerExited"
                         PointerPressed="NavResizeHandle_PointerPressed"
                         PointerMoved="NavResizeHandle_PointerMoved"
                         PointerReleased="NavResizeHandle_PointerReleased"
                         PointerCanceled="NavResizeHandle_PointerCanceled"
-                        PointerCaptureLost="NavResizeHandle_PointerCaptureLost">
-                    <Border x:Name="NavResizeGrip"
-                            Width="3"
-                            Height="44"
-                            CornerRadius="2"
-                            Background="{ThemeResource SystemControlForegroundBaseMediumLowBrush}"
-                            Opacity="0"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"/>
-                    <ToolTipService.ToolTip>
-                        <ToolTip x:Name="NavResizeToolTip" Content="拖动调整导航栏宽度"/>
-                    </ToolTipService.ToolTip>
-                </Border>
+                        PointerCaptureLost="NavResizeHandle_PointerCaptureLost"/>
             </Canvas>
         </Grid>
     </Grid>

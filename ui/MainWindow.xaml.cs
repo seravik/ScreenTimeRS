@@ -1,4 +1,5 @@
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -24,6 +25,14 @@ public enum ThemeMode
     Dark = 2
 }
 
+public sealed class NavigationResizeHandle : Grid
+{
+    public void SetResizeCursor()
+    {
+        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+    }
+}
+
 public sealed partial class MainWindow : Window
 {
     private readonly string _snapshotPath;
@@ -43,16 +52,18 @@ public sealed partial class MainWindow : Window
     private bool _resizingPane;
     private Snapshot _latestSnapshot = new();
     private uint _resizePointerId;
-    private bool _resizeHandleHovered;
 
     private readonly OverviewPage _overviewPage;
     private readonly AppsPage _appsPage;
     private readonly StatsPage _statsPage;
     private readonly SettingsPage _settingsPage;
 
+    private LanguageMode UiLanguage => LanguageResolver.Resolve(_languageMode);
+
     public MainWindow()
     {
         InitializeComponent();
+        NavResizeHandle.SetResizeCursor();
 
         // ProjectDirs::data_local_dir() on Windows resolves to:
         // %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data
@@ -384,10 +395,9 @@ public sealed partial class MainWindow : Window
     private void ApplyLanguage(LanguageMode language)
     {
         _languageMode = language;
-        // Always assign navigation labels explicitly for the selected language.
-        // Keeping the simplified strings here avoids inheriting any non-simplified
-        // text from previous XAML/resource state.
-        switch (language)
+        var effective = LanguageResolver.Resolve(language);
+
+        switch (effective)
         {
             case LanguageMode.English:
                 NavOverview.Content = "Overview";
@@ -408,16 +418,10 @@ public sealed partial class MainWindow : Window
                 NavSettings.Content = "设置";
                 break;
         }
-        NavResizeToolTip.Content = language switch
-        {
-            LanguageMode.English => "Drag to resize navigation pane",
-            LanguageMode.TraditionalChinese => "拖曳調整導覽列寬度",
-            _ => "拖动调整导航栏宽度"
-        };
-        _overviewPage.ApplyLanguage(language);
-        _appsPage.ApplyLanguage(language);
-        _statsPage.ApplyLanguage(language);
-        _settingsPage.SetLanguage(language);
+        _overviewPage.ApplyLanguage(effective);
+        _appsPage.ApplyLanguage(effective);
+        _statsPage.ApplyLanguage(effective);
+        _settingsPage.SetLanguage(language, effective);
     }
 
 
@@ -429,6 +433,7 @@ public sealed partial class MainWindow : Window
             var value = key?.GetValue(LanguageModeValue);
             return value switch
             {
+                string text when string.Equals(text, "system", StringComparison.OrdinalIgnoreCase) => LanguageMode.System,
                 string text when string.Equals(text, "en", StringComparison.OrdinalIgnoreCase) => LanguageMode.English,
                 string text when string.Equals(text, "zh-TW", StringComparison.OrdinalIgnoreCase) || string.Equals(text, "zh-Hant", StringComparison.OrdinalIgnoreCase) || string.Equals(text, "zh-HK", StringComparison.OrdinalIgnoreCase) => LanguageMode.TraditionalChinese,
                 _ => LanguageMode.SimplifiedChinese
@@ -447,6 +452,7 @@ public sealed partial class MainWindow : Window
             using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
             key?.SetValue(LanguageModeValue, mode switch
             {
+                LanguageMode.System => "system",
                 LanguageMode.English => "en",
                 LanguageMode.TraditionalChinese => "zh-TW",
                 _ => "zh-CN"
@@ -484,13 +490,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var en = _languageMode == LanguageMode.English;
-        var hant = _languageMode == LanguageMode.TraditionalChinese;
+        var uiLanguage = UiLanguage;
+        var en = uiLanguage == LanguageMode.English;
+        var hant = uiLanguage == LanguageMode.TraditionalChinese;
         var fullText = en
-            ? "TERMS OF USE\n\nVersion: v0.7.0\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.7.0\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
+            ? "TERMS OF USE\n\nVersion: v0.7.1\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.7.1\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
             : hant
-                ? "使用條款\n\n版本：v0.7.0\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.7.0\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
-                : "使用条款\n\n版本：v0.7.0\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.7.0\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+                ? "使用條款\n\n版本：v0.7.1\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.7.1\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
+                : "使用条款\n\n版本：v0.7.1\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.7.1\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
 
         var content = new ScrollViewer
         {
@@ -654,24 +661,6 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void NavResizeHandle_PointerEntered(object sender, PointerRoutedEventArgs e)
-    {
-        _resizeHandleHovered = true;
-        NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-        NavResizeGrip.Opacity = 1;
-        e.Handled = true;
-    }
-
-    private void NavResizeHandle_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        _resizeHandleHovered = false;
-        if (!_resizingPane)
-        {
-            NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-            NavResizeGrip.Opacity = 0;
-        }
-        e.Handled = true;
-    }
 
     private void NavResizeHandle_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
@@ -681,8 +670,6 @@ public sealed partial class MainWindow : Window
         _resizingPane = true;
         _resizePointerId = point.PointerId;
         NavResizeHandle.CapturePointer(e.Pointer);
-        NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-        NavResizeGrip.Opacity = 1;
         e.Handled = true;
     }
 
@@ -704,8 +691,6 @@ public sealed partial class MainWindow : Window
         _savedPaneLength = Nav.OpenPaneLength;
         SaveNavigationPaneLength(_savedPaneLength);
         try { NavResizeHandle.ReleasePointerCapture(e.Pointer); } catch { }
-        NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-        NavResizeGrip.Opacity = _resizeHandleHovered ? 1 : 0;
         e.Handled = true;
     }
 
@@ -727,23 +712,21 @@ public sealed partial class MainWindow : Window
         _savedPaneLength = Nav.OpenPaneLength;
         SaveNavigationPaneLength(_savedPaneLength);
         try { NavResizeHandle.ReleasePointerCaptures(); } catch { }
-        NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-        NavResizeGrip.Opacity = _resizeHandleHovered ? 1 : 0;
     }
 
     private void UpdateNavigationResizeHandle()
     {
-        if (!Nav.IsPaneOpen)
+        if (Nav.IsPaneOpen)
+        {
+            NavResizeHandle.Visibility = Visibility.Visible;
+            NavResizeHandle.Height = Math.Max(1, RootGrid.ActualHeight - 42);
+            Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 11));
+            Canvas.SetTop(NavResizeHandle, 0);
+        }
+        else
         {
             NavResizeHandle.Visibility = Visibility.Collapsed;
-            return;
         }
-
-        NavResizeHandle.Visibility = Visibility.Visible;
-        Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 5));
-        Canvas.SetTop(NavResizeHandle, Math.Max(0, (Nav.ActualHeight - NavResizeHandle.Height) / 2));
-        NavResizeGrip.Background = new SolidColorBrush(LoadAccentColor());
-        NavResizeGrip.Opacity = _resizeHandleHovered || _resizingPane ? 1 : 0;
     }
 
     private static double LoadNavigationPaneLength()
@@ -792,15 +775,15 @@ public sealed partial class MainWindow : Window
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
             SuggestedFileName = $"ScreenTimeRS-data-{DateTime.Now:yyyyMMdd-HHmmss}.json"
         };
-        picker.FileTypeChoices.Add(_languageMode == LanguageMode.English ? "JSON data" : _languageMode == LanguageMode.TraditionalChinese ? "JSON 資料" : "JSON 数据", new List<string> { ".json" });
+        picker.FileTypeChoices.Add(UiLanguage == LanguageMode.English ? "JSON data" : UiLanguage == LanguageMode.TraditionalChinese ? "JSON 資料" : "JSON 数据", new List<string> { ".json" });
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
         var file = await picker.PickSaveFileAsync();
         if (file is null) return;
 
         var ok = await RunCollectorCommandAsync("--export-data", file.Path);
         await ShowDataOperationResultAsync(ok,
-            UiText.ExportSuccess(_languageMode),
-            UiText.ExportFailed(_languageMode));
+            UiText.ExportSuccess(UiLanguage),
+            UiText.ExportFailed(UiLanguage));
     }
 
     private async void SettingsPage_ImportDataRequested(object? sender, EventArgs e)
@@ -812,16 +795,16 @@ public sealed partial class MainWindow : Window
         if (file is null) return;
 
         var confirmed = await ShowConfirmationAsync(
-            UiText.ImportTitle(_languageMode),
-            UiText.ImportConfirm(_languageMode),
-            UiText.ImportAction(_languageMode),
-            UiText.Cancel(_languageMode));
+            UiText.ImportTitle(UiLanguage),
+            UiText.ImportConfirm(UiLanguage),
+            UiText.ImportAction(UiLanguage),
+            UiText.Cancel(UiLanguage));
         if (!confirmed) return;
 
         var ok = await RunCollectorCommandAsync("--import-data", file.Path);
         await ShowDataOperationResultAsync(ok,
-            UiText.ImportSuccess(_languageMode),
-            UiText.ImportFailed(_languageMode));
+            UiText.ImportSuccess(UiLanguage),
+            UiText.ImportFailed(UiLanguage));
         if (ok)
             await RefreshAfterDataChangeAsync();
     }
@@ -830,18 +813,39 @@ public sealed partial class MainWindow : Window
     {
         var code = DataConfirmationCode.Generate();
         var dialogContent = new StackPanel { Spacing = 12 };
-        dialogContent.Children.Add(new TextBlock { Text = UiText.DeleteInstruction(_languageMode), TextWrapping = TextWrapping.Wrap });
-        dialogContent.Children.Add(new TextBlock { Text = string.Join(" ", code.ToCharArray()), FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center });
-        var input = new TextBox { PlaceholderText = UiText.DeletePlaceholder(_languageMode), HorizontalAlignment = HorizontalAlignment.Stretch };
+        dialogContent.Children.Add(new TextBlock
+        {
+            Text = UiText.DeleteInstruction(UiLanguage),
+            TextWrapping = TextWrapping.Wrap
+        });
+        dialogContent.Children.Add(new TextBlock
+        {
+            // Keep the confirmation code visually spaced without relying on
+            // TextBlock.LetterSpacing, which is not exposed by WinUI 3.
+            Text = string.Join(" ", code.ToCharArray()),
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        var input = new TextBox
+        {
+            PlaceholderText = UiText.DeletePlaceholder(UiLanguage),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
         dialogContent.Children.Add(input);
+
+        // Preserve the original v0.7.0 ContentDialog layout and change only
+        // the destructive button color.
         var dialog = new ContentDialog
         {
-            Title = UiText.DeleteTitle(_languageMode),
+            Title = UiText.DeleteTitle(UiLanguage),
             Content = dialogContent,
-            PrimaryButtonText = UiText.DeleteAction(_languageMode),
-            CloseButtonText = UiText.Cancel(_languageMode),
+            PrimaryButtonText = UiText.DeleteAction(UiLanguage),
+            CloseButtonText = UiText.Cancel(UiLanguage),
+            PrimaryButtonStyle = CreateDangerButtonStyle(),
             XamlRoot = ContentFrame.XamlRoot
         };
+
         dialog.PrimaryButtonClick += (_, args) =>
         {
             if (!string.Equals(input.Text.Trim(), code, StringComparison.Ordinal))
@@ -850,15 +854,47 @@ public sealed partial class MainWindow : Window
                 input.Focus(FocusState.Programmatic);
             }
         };
+
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return;
 
+        var finalDialog = new ContentDialog
+        {
+            Title = UiText.DeleteFinalTitle(UiLanguage),
+            Content = new TextBlock
+            {
+                Text = UiText.DeleteFinalInstruction(UiLanguage),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 620
+            },
+            PrimaryButtonText = UiText.DeleteAction(UiLanguage),
+            CloseButtonText = UiText.Cancel(UiLanguage),
+            PrimaryButtonStyle = CreateDangerButtonStyle(),
+            XamlRoot = ContentFrame.XamlRoot
+        };
+
+        var finalResult = await finalDialog.ShowAsync();
+        if (finalResult != ContentDialogResult.Primary) return;
+
         var ok = await RunCollectorCommandAsync("--clear-data", code);
         await ShowDataOperationResultAsync(ok,
-            UiText.DeleteSuccess(_languageMode),
-            UiText.DeleteFailed(_languageMode));
+            UiText.DeleteSuccess(UiLanguage),
+            UiText.DeleteFailed(UiLanguage));
         if (ok)
             await RefreshAfterDataChangeAsync();
+    }
+
+    private static Style CreateDangerButtonStyle()
+    {
+        var style = new Style(typeof(Button));
+        if (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var baseStyle) && baseStyle is Style defaultStyle)
+            style.BasedOn = defaultStyle;
+
+        var danger = new SolidColorBrush(Color.FromArgb(255, 196, 43, 28));
+        style.Setters.Add(new Setter(Button.BackgroundProperty, danger));
+        style.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Microsoft.UI.Colors.White)));
+        style.Setters.Add(new Setter(Button.BorderBrushProperty, danger));
+        return style;
     }
 
     private async Task<bool> RunCollectorCommandAsync(string command, string argument)
@@ -899,9 +935,9 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new ContentDialog
         {
-            Title = success ? UiText.Done(_languageMode) : UiText.Error(_languageMode),
+            Title = success ? UiText.Done(UiLanguage) : UiText.Error(UiLanguage),
             Content = success ? successText : failedText,
-            CloseButtonText = UiText.Close(_languageMode),
+            CloseButtonText = UiText.Close(UiLanguage),
             XamlRoot = ContentFrame.XamlRoot
         };
         await dialog.ShowAsync();

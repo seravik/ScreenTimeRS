@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.7.0"
+#define MyAppVersion "0.7.1"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.7.0-Setup
+OutputBaseFilename=ScreenTimeRS-v0.7.1-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -20,11 +20,13 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+LanguageDetectionMethod=none
 DisableProgramGroupPage=yes
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"
+Name: "chinesetrad"; MessagesFile: "Languages\ChineseTraditional.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:ShortcutGroup}"
@@ -37,6 +39,9 @@ english.StartupGroup=Windows startup:
 chinesesimp.ShortcutGroup=快捷方式：
 chinesesimp.StartupDescription=登录 Windows 时在后台静默启动 ScreenTime RS
 chinesesimp.StartupGroup=Windows 启动：
+chinesetrad.ShortcutGroup=捷徑：
+chinesetrad.StartupDescription=登入 Windows 時在背景靜默啟動 ScreenTime RS
+chinesetrad.StartupGroup=Windows 啟動：
 
 [Files]
 Source: "..\dist\ui\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

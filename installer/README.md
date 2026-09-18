@@ -1,4 +1,4 @@
-# ScreenTime RS v0.7.0 Installer
+# ScreenTime RS v0.7.1 Installer
 
 Build from the project root:
 
@@ -9,7 +9,10 @@ Build from the project root:
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.7.0-Setup.exe
+installer-output\ScreenTimeRS-v0.7.1-Setup.exe
 ```
 
 The installer supports desktop and Start Menu shortcuts, optional Windows startup, and the application uninstaller.
+
+
+Installer languages: English (default), Simplified Chinese, Traditional Chinese.

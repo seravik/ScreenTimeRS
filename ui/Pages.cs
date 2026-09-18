@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using Microsoft.Win32;
 using System.Security.Cryptography;
@@ -18,9 +19,33 @@ namespace ScreenTimeRS.UI;
 
 public enum LanguageMode
 {
-    SimplifiedChinese = 0,
-    TraditionalChinese = 1,
-    English = 2
+    System = 0,
+    SimplifiedChinese = 1,
+    TraditionalChinese = 2,
+    English = 3
+}
+
+internal static class LanguageResolver
+{
+    public static LanguageMode Resolve(LanguageMode preference)
+    {
+        if (preference != LanguageMode.System)
+            return preference;
+
+        var culture = CultureInfo.CurrentUICulture;
+        var name = culture.Name;
+
+        if (name.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("zh-HK", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("zh-MO", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Hant", StringComparison.OrdinalIgnoreCase))
+            return LanguageMode.TraditionalChinese;
+
+        if (name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return LanguageMode.SimplifiedChinese;
+
+        return LanguageMode.English;
+    }
 }
 
 internal static class UiText
@@ -42,6 +67,8 @@ internal static class UiText
     public static string DeleteInstruction(LanguageMode l) => l switch { LanguageMode.English => "This action permanently deletes all recorded usage data. Type the code below exactly to confirm.", LanguageMode.TraditionalChinese => "此操作將永久刪除所有已記錄的使用資料。請準確輸入下方代碼以確認。", _ => "此操作将永久删除所有已记录的使用数据。请准确输入下方验证码确认。" };
     public static string DeletePlaceholder(LanguageMode l) => l switch { LanguageMode.English => "Enter confirmation code", LanguageMode.TraditionalChinese => "輸入確認代碼", _ => "输入确认验证码" };
     public static string DeleteAction(LanguageMode l) => l switch { LanguageMode.English => "Delete all data", LanguageMode.TraditionalChinese => "刪除所有資料", _ => "删除全部数据" };
+    public static string DeleteFinalTitle(LanguageMode l) => l switch { LanguageMode.English => "Final confirmation", LanguageMode.TraditionalChinese => "最終確認", _ => "最终确认" };
+    public static string DeleteFinalInstruction(LanguageMode l) => l switch { LanguageMode.English => "The confirmation code is correct. All recorded usage data will be permanently deleted and cannot be recovered. Continue?", LanguageMode.TraditionalChinese => "驗證碼正確。所有已記錄的使用資料將永久刪除且無法復原。是否繼續？", _ => "验证码正确。所有已记录的使用数据将永久删除且无法恢复。是否继续？" };
     public static string DeleteSuccess(LanguageMode l) => l switch { LanguageMode.English => "All usage data has been deleted.", LanguageMode.TraditionalChinese => "所有使用資料已刪除。", _ => "所有使用数据已删除。" };
     public static string DeleteFailed(LanguageMode l) => l switch { LanguageMode.English => "The usage data could not be deleted.", LanguageMode.TraditionalChinese => "無法刪除使用資料。", _ => "无法删除使用数据。" };
     public static string ImportSuccess(LanguageMode l) => l switch { LanguageMode.English => "Usage data imported successfully.", LanguageMode.TraditionalChinese => "使用資料已成功匯入。", _ => "使用数据已成功导入。" };
@@ -51,7 +78,14 @@ internal static class UiText
     public static string Close(LanguageMode l) => l switch { LanguageMode.English => "Close", LanguageMode.TraditionalChinese => "關閉", _ => "关闭" };
     public static string Cancel(LanguageMode l) => l switch { LanguageMode.English => "Cancel", LanguageMode.TraditionalChinese => "取消", _ => "取消" };
 
-    public static string LanguageName(LanguageMode l) => l switch { LanguageMode.English => "English", LanguageMode.TraditionalChinese => "繁體中文", _ => "简体中文" };
+    public static string LanguageName(LanguageMode l) => l switch { LanguageMode.System => "Follow system", LanguageMode.English => "English", LanguageMode.TraditionalChinese => "繁體中文", _ => "简体中文" };
+    public static string LocalizedLanguageName(LanguageMode l, LanguageMode ui) => l switch
+    {
+        LanguageMode.System => ui == LanguageMode.TraditionalChinese ? "跟隨系統" : ui == LanguageMode.English ? "Follow system" : "跟随系统",
+        LanguageMode.English => "English",
+        LanguageMode.TraditionalChinese => "繁體中文",
+        _ => "简体中文"
+    };
 }
 
 internal static class DataConfirmationCode
@@ -1134,6 +1168,7 @@ public sealed class SettingsPage : Page
     bool updatingLanguage;
     bool updatingColor;
     LanguageMode _language;
+    LanguageMode _languagePreference;
     UIColor _accentColor;
 
     public event EventHandler<ThemeMode>? ThemeModeChanged;
@@ -1145,7 +1180,8 @@ public sealed class SettingsPage : Page
 
     public SettingsPage(ThemeMode mode, LanguageMode languageMode, UIColor accentColor)
     {
-        _language = languageMode;
+        _languagePreference = languageMode;
+        _language = LanguageResolver.Resolve(languageMode);
         _accentColor = accentColor;
 
         var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
@@ -1314,7 +1350,7 @@ public sealed class SettingsPage : Page
         p.Children.Add(aboutText);
         Content = new ScrollViewer { Content = p };
 
-        SetLanguage(languageMode);
+        SetLanguage(languageMode, LanguageResolver.Resolve(languageMode));
         SetThemeMode(mode);
         UpdatePaletteVisuals();
         LocalizeColorPickerText();
@@ -1639,8 +1675,9 @@ public sealed class SettingsPage : Page
     private void Language_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (updatingLanguage || language.SelectedIndex < 0) return;
-        _language = (LanguageMode)language.SelectedIndex;
-        LanguageChanged?.Invoke(this, _language);
+        _languagePreference = (LanguageMode)language.SelectedIndex;
+        _language = LanguageResolver.Resolve(_languagePreference);
+        LanguageChanged?.Invoke(this, _languagePreference);
     }
 
     private void ColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
@@ -1741,19 +1778,21 @@ public sealed class SettingsPage : Page
         updatingTheme = false;
     }
 
-    public void SetLanguage(LanguageMode mode)
+    public void SetLanguage(LanguageMode preference, LanguageMode effective)
     {
-        _language = mode;
+        _languagePreference = preference;
+        _language = effective;
         updatingLanguage = true;
         language.Items.Clear();
-        language.Items.Add(UiText.LanguageName(LanguageMode.SimplifiedChinese));
-        language.Items.Add(UiText.LanguageName(LanguageMode.TraditionalChinese));
-        language.Items.Add(UiText.LanguageName(LanguageMode.English));
-        language.SelectedIndex = (int)mode;
+        language.Items.Add(UiText.LocalizedLanguageName(LanguageMode.System, effective));
+        language.Items.Add(UiText.LocalizedLanguageName(LanguageMode.SimplifiedChinese, effective));
+        language.Items.Add(UiText.LocalizedLanguageName(LanguageMode.TraditionalChinese, effective));
+        language.Items.Add(UiText.LocalizedLanguageName(LanguageMode.English, effective));
+        language.SelectedIndex = (int)preference;
         updatingLanguage = false;
 
-        var en = mode == LanguageMode.English;
-        var hant = mode == LanguageMode.TraditionalChinese;
+        var en = effective == LanguageMode.English;
+        var hant = effective == LanguageMode.TraditionalChinese;
         pageTitle.Text = en ? "Settings" : hant ? "設定" : "设置";
         generalTitle.Text = en ? "General" : hant ? "一般" : "常规";
         startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : hant ? "登入 Windows 後在背景靜默啟動 ScreenTime RS" : "登录 Windows 后在后台静默启动";
@@ -1780,9 +1819,9 @@ public sealed class SettingsPage : Page
         termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看用户条款与隐私政策";
         aboutTitle.Text = en ? "About" : hant ? "關於" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.7.0\nRust monitoring core + WinUI 3 / Fluent UI"
-            : hant ? "ScreenTime RS\n版本 0.7.0\nRust 監控核心 + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.7.0\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.7.1\nRust monitoring core + WinUI 3 / Fluent UI"
+            : hant ? "ScreenTime RS\n版本 0.7.1\nRust 監控核心 + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.7.1\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -1830,9 +1869,9 @@ public sealed class SettingsPage : Page
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.7.0";
-    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.7.0";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.7.0";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.7.1";
+    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.7.1";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.7.1";
 
     static bool StartupEnabled()
     {
