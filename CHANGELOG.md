@@ -1,4 +1,4 @@
-## v0.6.0
+## v0.6.1
 
 ### Corrective update
 - 修复 `Pages.cs` 中 `ProgressBar` 主题轨道画刷引用错误导致的 `CS0103` 编译失败。
