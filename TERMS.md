@@ -1,8 +1,11 @@
-# ScreenTime RS 使用条款
+# ScreenTime RS Terms of Use
 
-版本：v0.6.2
+Version: v0.7.0
 
-1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。
-2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。
-3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。
-4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。
+1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.
+2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.
+3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.
+4. Exported usage data is created at the user's request and should be stored securely by the user.
+5. Importing a backup replaces the current usage history with the selected backup. Users should verify the source of a backup before importing it.
+6. The Delete all data action is destructive and permanently removes recorded usage history from the local database after confirmation.
+7. Do not use the software for activities that violate applicable laws or the legitimate rights of others.

@@ -1,9 +1,11 @@
-# ScreenTime RS 隐私政策
+# ScreenTime RS Privacy Policy
 
-版本：v0.6.2
+Version: v0.7.0
 
-1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。
-2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。
-3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。
-4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。
-5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。
+1. ScreenTime RS stores its core usage statistics locally and does not actively upload them to a remote server.
+2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.
+3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.
+4. Usage history can be exported by the user to a local JSON file and imported back into the application. Imported data replaces the current usage history after confirmation.
+5. The Delete all data action permanently removes the recorded usage history from the local database after confirmation. It does not automatically remove application settings.
+6. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.
+7. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.

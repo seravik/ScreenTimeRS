@@ -1,84 +1,105 @@
-# ScreenTime RS v0.6.2
+# ScreenTime RS v0.7.0
 
-ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具，采用 **Rust 监控核心 + WinUI 3 / Fluent UI**。数据保存在本机 SQLite 中，WinUI 前端通过实时快照展示统计结果。
+ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
 
-## v0.6.2 更新
+## v0.7.0
 
-- Statistics 支持 **最近 30 天 / 最近 90 天 / 近半年 / 近一年 / 全部时间 (Last 30 days / Last 90 days / Last 6 months / Last year / All time)** 统计范围。
-- 新增周期总计、日均使用、活跃天数与最高单日使用时长。
-- 重构每日使用趋势为紧凑的竖状柱形图，并保留周期内 Top Apps。
-- App Usage 支持今天 / 本周 / 本月 / 近半年 / 近一年 / 全部时间查询范围。
-- 后台采集加入 Windows 最近输入检测，连续 **5 分钟**无键鼠输入时暂停计时，减少离开电脑后的误计时。
-- 历史统计扩展至年度及全部时间范围，并降低历史应用查询刷新频率，减少后台数据库开销。
-- Overview 趋势范围扩展至最近 30 天，并保持锁定 / 空闲状态反馈与实时 CPU / 内存信息。
+- Added **Traditional Chinese** and renamed the original Chinese option to **Simplified Chinese**.
+- Added local usage-data **export and import** using JSON backups.
+- Added **Delete all data** with a generated confirmation code and an explicitly highlighted destructive action.
+- Removed the duplicated top page banner and consolidated the main controls into the custom title bar.
+- Added a visible navigation-pane resize affordance with a draggable handle and pointer feedback.
+- Improved language coverage across navigation, settings, statistics, usage periods, and color-picker related UI.
 
-## 项目架构
+## Core features
+
+- Today, yesterday, this week, and this month overview statistics.
+- Application usage ranges: Today, This week, This month, Last 6 months, Last year, and All time.
+- Statistics ranges: Last 30 days, Last 90 days, Last 6 months, Last year, and All time.
+- Daily usage charts and application rankings.
+- Windows idle and lock-state awareness to improve usage-time accuracy.
+- CPU and memory monitoring.
+- Local SQLite storage with JSON backup and restore.
+- Windows system-tray support and optional background startup.
+- Light, dark, system, and custom accent-color themes.
+
+## Architecture
 
 ```text
 WinUI 3 / Fluent UI
         │
         │ snapshot.json
         ▼
-Rust 后台监控核心
+Rust monitoring core
         │
-        ├── 前台进程检测
-        ├── 键鼠空闲 / 锁定状态检测
-        ├── CPU / 内存指标
-        ├── SQLite 本地数据库
-        └── 系统托盘
+        ├── Foreground application detection
+        ├── Keyboard / mouse idle and lock-state detection
+        ├── CPU / memory metrics
+        ├── Local SQLite database
+        └── System tray
 ```
 
-## Windows 构建环境
-
-要求：
+## Build requirements
 
 - Windows 10 / 11 x64
-- Rust Stable + MSVC 工具链
+- Rust Stable with the MSVC toolchain
 - .NET 8 SDK
-- Windows App SDK（通过 NuGet 自动还原）
-- Inno Setup 6（用于生成安装程序）
+- Windows App SDK restored through NuGet
+- Inno Setup 6 for the installer
 
-### 构建程序
+### Build the application
 
 ```powershell
 .\build-windows.bat
 ```
 
-输出：
+Output:
 
 ```text
 dist\ui\ScreenTimeRS.UI.exe
 dist\ui\screentime-rs.exe
 ```
 
-### 构建安装程序
+### Build the installer
 
 ```powershell
 .\build-installer.bat
 ```
 
-输出：
+Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.6.2-Setup.exe
+installer-output\ScreenTimeRS-v0.7.0-Setup.exe
 ```
 
-## 数据位置
+## Usage-data backup
 
-SQLite：
+Export and import are available from **Settings → Data management**.
+
+The backup format is JSON and contains the locally recorded application-usage history. Importing replaces the current usage history with the selected backup. Settings are not included in the backup.
+
+The delete-all-data action removes the recorded usage history. It does not remove application settings or uninstall the program.
+
+## Local data
+
+SQLite database:
 
 ```text
 %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\screentime.db
 ```
 
-实时快照：
+Runtime snapshot:
 
 ```text
 %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\snapshot.json
 ```
 
-项目不会主动将统计数据上传到远程服务器。
+ScreenTime RS does not actively upload usage statistics to a remote server.
 
-## 当前版本
+## License
 
-**v0.6.2**
+See [LICENSE](LICENSE).
+
+## Version
+
+**v0.7.0**

@@ -7,45 +7,64 @@
     mc:Ignorable="d">
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="32"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="42"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Custom title bar. The default system title bar is hidden in code
-             with ExtendsContentIntoTitleBar=true, so the app title is rendered
-             exactly once and remains vertically aligned with the icon. -->
+        <!-- Compact custom title bar with the application identity only. -->
         <Grid x:Name="AppTitleBar" Grid.Row="0" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="10,0,140,0">
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <Image Width="16" Height="16"
-                       Stretch="Uniform" VerticalAlignment="Center" Source="ms-appx:///Assets/ScreenTimeRS-titlebar.png"/>
-                <TextBlock Text="ScreenTime RS" FontSize="14"
-                           LineHeight="20" VerticalAlignment="Center"/>
-            </StackPanel>
-        </Grid>
-
-        <Border Grid.Row="1" Padding="24,18,24,14" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock x:Name="AppHeaderTitle" Text="ScreenTime RS" FontSize="22" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="AppHeaderSubtitle" Text="Windows 使用时间与应用统计" Opacity="0.65" FontSize="12" Margin="0,2,0,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="ThemeButton" Click="ThemeButton_Click" Content="主题" Background="{ThemeResource ScreenTimeAccentBrush}" Foreground="White"/>
-                    <Button x:Name="RefreshButton" Click="RefreshButton_Click" Content="刷新"/>
+            <Grid x:Name="AppTitleBarDragRegion">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Image Width="16" Height="16"
+                           Stretch="Uniform" VerticalAlignment="Center" Source="ms-appx:///Assets/ScreenTimeRS-titlebar.png"/>
+                    <TextBlock Text="ScreenTime RS" FontSize="14"
+                               LineHeight="20" VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>
-        </Border>
+        </Grid>
 
-        <NavigationView x:Name="Nav" Grid.Row="2" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" SelectionChanged="Nav_SelectionChanged" Loaded="Nav_Loaded" PaneDisplayMode="Left">
-            <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="NavOverview" Content="概览" Tag="overview" Icon="Home"/>
-                <NavigationViewItem x:Name="NavApps" Content="应用使用时间" Tag="apps" Icon="AllApps"/>
-                <NavigationViewItem x:Name="NavStats" Content="统计" Tag="stats" Icon="Library"/>
-                <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
-            </NavigationView.MenuItems>
-            <Frame x:Name="ContentFrame"/>
-        </NavigationView>
+        <Grid Grid.Row="1">
+            <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                            SelectionChanged="Nav_SelectionChanged" Loaded="Nav_Loaded" PaneDisplayMode="Left">
+                <NavigationView.MenuItems>
+                    <NavigationViewItem x:Name="NavOverview" Content="概览" Tag="overview" Icon="Home"/>
+                    <NavigationViewItem x:Name="NavApps" Content="应用使用时间" Tag="apps" Icon="AllApps"/>
+                    <NavigationViewItem x:Name="NavStats" Content="统计" Tag="stats" Icon="Library"/>
+                    <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
+                </NavigationView.MenuItems>
+                <Frame x:Name="ContentFrame"/>
+            </NavigationView>
+
+            <!-- Invisible resize hit area on the navigation pane edge. The grip
+                 appears only while the pointer is over the resize area or dragging. -->
+            <Canvas x:Name="NavResizeCanvas" IsHitTestVisible="True">
+                <Border x:Name="NavResizeHandle"
+                        Width="10"
+                        Height="72"
+                        CornerRadius="5"
+                        Background="Transparent"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        PointerEntered="NavResizeHandle_PointerEntered"
+                        PointerExited="NavResizeHandle_PointerExited"
+                        PointerPressed="NavResizeHandle_PointerPressed"
+                        PointerMoved="NavResizeHandle_PointerMoved"
+                        PointerReleased="NavResizeHandle_PointerReleased"
+                        PointerCanceled="NavResizeHandle_PointerCanceled"
+                        PointerCaptureLost="NavResizeHandle_PointerCaptureLost">
+                    <Border x:Name="NavResizeGrip"
+                            Width="3"
+                            Height="44"
+                            CornerRadius="2"
+                            Background="{ThemeResource SystemControlForegroundBaseMediumLowBrush}"
+                            Opacity="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip x:Name="NavResizeToolTip" Content="拖动调整导航栏宽度"/>
+                    </ToolTipService.ToolTip>
+                </Border>
+            </Canvas>
+        </Grid>
     </Grid>
 </Window>

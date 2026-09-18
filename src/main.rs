@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use chrono::{Datelike, Duration as ChronoDuration, Local, Months, NaiveDate};
 use directories::ProjectDirs;
 use rusqlite::{params, Connection};
@@ -22,6 +23,8 @@ use windows::Win32::{
 
 const APP_NAME: &str = "ScreenTime RS";
 const SHUTDOWN_FILE: &str = "shutdown.flag";
+const REFRESH_FILE: &str = "refresh.flag";
+const EXPORT_FORMAT_VERSION: u32 = 1;
 #[derive(Clone, Default)]
 struct AppStat {
     name: String,
@@ -80,7 +83,11 @@ impl Database {
         let _ = c.execute("ALTER TABLE app_usage ADD COLUMN exe_path TEXT NOT NULL DEFAULT ''", []);
         Ok(db)
     }
-    fn conn(&self) -> Result<Connection> { Ok(Connection::open(&self.path)?) }
+    fn conn(&self) -> Result<Connection> {
+        let c = Connection::open(&self.path)?;
+        c.busy_timeout(Duration::from_secs(5))?;
+        Ok(c)
+    }
     fn add(&self, date: &str, app: &str, seconds: i64, exe_path: &str) -> Result<()> {
         if seconds <= 0 || app.is_empty() { return Ok(()); }
         let c = self.conn()?;
@@ -194,6 +201,47 @@ impl Database {
         Ok(out)
     }
 
+    fn export_records(&self) -> Result<Vec<ExportRecord>> {
+        let c = self.conn()?;
+        let mut st = c.prepare(
+            "SELECT date, app, seconds, exe_path FROM app_usage ORDER BY date, app"
+        )?;
+        let rows = st.query_map([], |r| Ok(ExportRecord {
+            date: r.get(0)?,
+            app: r.get(1)?,
+            seconds: r.get(2)?,
+            exe_path: r.get(3).unwrap_or_default(),
+        }))?;
+        Ok(rows.filter_map(Result::ok).collect())
+    }
+
+    fn replace_all_records(&self, records: &[ExportRecord]) -> Result<()> {
+        let mut c = self.conn()?;
+        let tx = c.transaction()?;
+        tx.execute("DELETE FROM app_usage", [])?;
+        {
+            let mut st = tx.prepare(
+                "INSERT INTO app_usage(date, app, seconds, exe_path) VALUES(?1, ?2, ?3, ?4)"
+            )?;
+            for record in records {
+                if record.app.trim().is_empty() || record.seconds < 0 {
+                    anyhow::bail!("invalid usage record");
+                }
+                NaiveDate::parse_from_str(&record.date, "%Y-%m-%d")
+                    .map_err(|_| anyhow::anyhow!("invalid usage record date"))?;
+                st.execute(params![record.date, record.app, record.seconds, record.exe_path])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn clear_all_records(&self) -> Result<()> {
+        let c = self.conn()?;
+        c.execute("DELETE FROM app_usage", [])?;
+        Ok(())
+    }
+
 }
 
 #[cfg(windows)]
@@ -273,6 +321,23 @@ struct JsonApp { name: String, seconds: i64, exe_path: String }
 #[derive(serde::Serialize)]
 struct JsonDaily { label: String, seconds: i64 }
 
+#[derive(Serialize, Deserialize)]
+struct ExportRecord {
+    date: String,
+    app: String,
+    seconds: i64,
+    #[serde(default)]
+    exe_path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ExportFile {
+    format_version: u32,
+    application: String,
+    exported_at: String,
+    records: Vec<ExportRecord>,
+}
+
 #[derive(serde::Serialize)]
 struct JsonSnapshot {
     current_app: String, current_window: String, today: i64, yesterday: i64, week: i64, month: i64,
@@ -291,6 +356,17 @@ fn snapshot_path() -> Option<std::path::PathBuf> {
 
 fn shutdown_path() -> Option<std::path::PathBuf> {
     data_dir().map(|d| d.join(SHUTDOWN_FILE))
+}
+
+fn refresh_path() -> Option<std::path::PathBuf> {
+    data_dir().map(|d| d.join(REFRESH_FILE))
+}
+
+fn request_refresh() {
+    if let Some(path) = refresh_path() {
+        if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+        let _ = std::fs::write(path, b"refresh");
+    }
 }
 
 fn request_shutdown() {
@@ -355,6 +431,9 @@ impl Collector {
                 if shutdown_path().map(|p| p.exists()).unwrap_or(false) {
                     return;
                 }
+                let force_refresh = refresh_path().map(|p| {
+                    if p.exists() { let _ = std::fs::remove_file(&p); true } else { false }
+                }).unwrap_or(false);
 
                 let sec = last.elapsed().as_secs().clamp(1, 2) as i64;
                 last = Instant::now();
@@ -382,7 +461,7 @@ impl Collector {
                 refresh_counter = refresh_counter.wrapping_add(1);
                 // Historical application lists are comparatively expensive; refresh them
                 // every five seconds while keeping today's data and system metrics live.
-                if refresh_counter % 5 == 0 || (cached_week.is_empty() && cached_all.is_empty()) {
+                if force_refresh || refresh_counter % 5 == 0 || (cached_week.is_empty() && cached_all.is_empty()) {
                     cached_week = db.apps_range(week_start, today).unwrap_or_default();
                     cached_month = db.apps_range(month_start, today).unwrap_or_default();
                     cached_half_year = db.apps_range(six_months_ago, today).unwrap_or_default();
@@ -450,7 +529,61 @@ fn launch_ui() {
     }
 }
 
+
+fn handle_cli(args: &[String]) -> Result<bool> {
+    match args.get(1).map(String::as_str) {
+        Some("--export-data") => {
+            let path = args.get(2).ok_or_else(|| anyhow::anyhow!("missing export path"))?;
+            let db = Database::new()?;
+            let export = ExportFile {
+                format_version: EXPORT_FORMAT_VERSION,
+                application: APP_NAME.to_string(),
+                exported_at: Local::now().to_rfc3339(),
+                records: db.export_records()?,
+            };
+            let target = std::path::PathBuf::from(path);
+            if let Some(parent) = target.parent() {
+                if !parent.as_os_str().is_empty() { std::fs::create_dir_all(parent)?; }
+            }
+            let text = serde_json::to_string_pretty(&export)?;
+            std::fs::write(target, text)?;
+            Ok(true)
+        }
+        Some("--import-data") => {
+            let path = args.get(2).ok_or_else(|| anyhow::anyhow!("missing import path"))?;
+            let text = std::fs::read_to_string(path)?;
+            let export: ExportFile = serde_json::from_str(&text)?;
+            if export.format_version != EXPORT_FORMAT_VERSION {
+                anyhow::bail!("unsupported usage data format");
+            }
+            if !export.application.is_empty() && export.application != APP_NAME {
+                anyhow::bail!("unsupported application data");
+            }
+            let db = Database::new()?;
+            db.replace_all_records(&export.records)?;
+            request_refresh();
+            Ok(true)
+        }
+        Some("--clear-data") => {
+            let token = args.get(2).map(String::as_str).unwrap_or("");
+            if token.len() < 6 || token.len() > 32 {
+                anyhow::bail!("invalid confirmation token");
+            }
+            let db = Database::new()?;
+            db.clear_all_records()?;
+            request_refresh();
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn main()->Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if handle_cli(&args)? {
+        return Ok(());
+    }
+
     let db=Arc::new(Database::new()?);
     let snap=Arc::new(Mutex::new(Snapshot::default()));
 

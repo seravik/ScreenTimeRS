@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Building ScreenTime RS v0.6.2...
+echo Building ScreenTime RS v0.7.0...
 cargo build --release
 if errorlevel 1 exit /b 1
 if exist dist\ui rmdir /s /q dist\ui

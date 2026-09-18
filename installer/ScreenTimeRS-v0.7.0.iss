@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.6.2"
+#define MyAppVersion "0.7.0"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.6.2-Setup
+OutputBaseFilename=ScreenTimeRS-v0.7.0-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -41,6 +41,7 @@ chinesesimp.StartupGroup=Windows 启动：
 [Files]
 Source: "..\dist\ui\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md"; DestDir: "{app}"
+Source: "..\README.zh-CN.md"; DestDir: "{app}"
 Source: "..\CHANGELOG.md"; DestDir: "{app}"
 Source: "..\TERMS.md"; DestDir: "{app}"
 Source: "..\PRIVACY.md"; DestDir: "{app}"

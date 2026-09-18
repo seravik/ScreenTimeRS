@@ -11,14 +11,60 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using Microsoft.Win32;
+using System.Security.Cryptography;
 using UIColor = Windows.UI.Color;
 
 namespace ScreenTimeRS.UI;
 
 public enum LanguageMode
 {
-    Chinese = 0,
-    English = 1
+    SimplifiedChinese = 0,
+    TraditionalChinese = 1,
+    English = 2
+}
+
+internal static class UiText
+{
+    public static bool IsEnglish(LanguageMode language) => language == LanguageMode.English;
+    public static bool IsTraditional(LanguageMode language) => language == LanguageMode.TraditionalChinese;
+
+    public static string NavOverview(LanguageMode l) => l switch { LanguageMode.English => "Overview", LanguageMode.TraditionalChinese => "概覽", _ => "概览" };
+    public static string NavApps(LanguageMode l) => l switch { LanguageMode.English => "App usage", LanguageMode.TraditionalChinese => "應用程式使用時間", _ => "应用使用时间" };
+    public static string NavStats(LanguageMode l) => l switch { LanguageMode.English => "Statistics", LanguageMode.TraditionalChinese => "統計", _ => "统计" };
+    public static string NavSettings(LanguageMode l) => l switch { LanguageMode.English => "Settings", LanguageMode.TraditionalChinese => "設定", _ => "设置" };
+
+    public static string ExportSuccess(LanguageMode l) => l switch { LanguageMode.English => "Usage data exported successfully.", LanguageMode.TraditionalChinese => "使用資料已成功匯出。", _ => "使用数据已成功导出。" };
+    public static string ExportFailed(LanguageMode l) => l switch { LanguageMode.English => "The usage data could not be exported.", LanguageMode.TraditionalChinese => "無法匯出使用資料。", _ => "无法导出使用数据。" };
+    public static string ImportTitle(LanguageMode l) => l switch { LanguageMode.English => "Import usage data", LanguageMode.TraditionalChinese => "匯入使用資料", _ => "导入使用数据" };
+    public static string ImportConfirm(LanguageMode l) => l switch { LanguageMode.English => "Importing will replace the current usage history with the selected backup. Continue?", LanguageMode.TraditionalChinese => "匯入將以所選備份取代目前的使用歷史記錄。要繼續嗎？", _ => "导入将使用所选备份替换当前使用历史记录。是否继续？" };
+    public static string ImportAction(LanguageMode l) => l switch { LanguageMode.English => "Import", LanguageMode.TraditionalChinese => "匯入", _ => "导入" };
+    public static string DeleteTitle(LanguageMode l) => l switch { LanguageMode.English => "Delete all usage data", LanguageMode.TraditionalChinese => "刪除所有使用資料", _ => "删除所有使用数据" };
+    public static string DeleteInstruction(LanguageMode l) => l switch { LanguageMode.English => "This action permanently deletes all recorded usage data. Type the code below exactly to confirm.", LanguageMode.TraditionalChinese => "此操作將永久刪除所有已記錄的使用資料。請準確輸入下方代碼以確認。", _ => "此操作将永久删除所有已记录的使用数据。请准确输入下方验证码确认。" };
+    public static string DeletePlaceholder(LanguageMode l) => l switch { LanguageMode.English => "Enter confirmation code", LanguageMode.TraditionalChinese => "輸入確認代碼", _ => "输入确认验证码" };
+    public static string DeleteAction(LanguageMode l) => l switch { LanguageMode.English => "Delete all data", LanguageMode.TraditionalChinese => "刪除所有資料", _ => "删除全部数据" };
+    public static string DeleteSuccess(LanguageMode l) => l switch { LanguageMode.English => "All usage data has been deleted.", LanguageMode.TraditionalChinese => "所有使用資料已刪除。", _ => "所有使用数据已删除。" };
+    public static string DeleteFailed(LanguageMode l) => l switch { LanguageMode.English => "The usage data could not be deleted.", LanguageMode.TraditionalChinese => "無法刪除使用資料。", _ => "无法删除使用数据。" };
+    public static string ImportSuccess(LanguageMode l) => l switch { LanguageMode.English => "Usage data imported successfully.", LanguageMode.TraditionalChinese => "使用資料已成功匯入。", _ => "使用数据已成功导入。" };
+    public static string ImportFailed(LanguageMode l) => l switch { LanguageMode.English => "The selected backup could not be imported.", LanguageMode.TraditionalChinese => "無法匯入所選備份。", _ => "无法导入所选备份。" };
+    public static string Done(LanguageMode l) => l switch { LanguageMode.English => "Done", LanguageMode.TraditionalChinese => "完成", _ => "完成" };
+    public static string Error(LanguageMode l) => l switch { LanguageMode.English => "Error", LanguageMode.TraditionalChinese => "錯誤", _ => "错误" };
+    public static string Close(LanguageMode l) => l switch { LanguageMode.English => "Close", LanguageMode.TraditionalChinese => "關閉", _ => "关闭" };
+    public static string Cancel(LanguageMode l) => l switch { LanguageMode.English => "Cancel", LanguageMode.TraditionalChinese => "取消", _ => "取消" };
+
+    public static string LanguageName(LanguageMode l) => l switch { LanguageMode.English => "English", LanguageMode.TraditionalChinese => "繁體中文", _ => "简体中文" };
+}
+
+internal static class DataConfirmationCode
+{
+    const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    public static string Generate()
+    {
+        Span<char> buffer = stackalloc char[6];
+        for (int i = 0; i < buffer.Length; i++)
+            buffer[i] = Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)];
+        return new string(buffer);
+    }
 }
 
 public sealed class OverviewPage : Page
@@ -35,7 +81,7 @@ public sealed class OverviewPage : Page
     readonly Border trendHoverCard;
     readonly TextBlock trendHoverText;
     int _hoveredTrendIndex = -1;
-    LanguageMode _language = LanguageMode.Chinese;
+    LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
     bool statusClosed;
 
@@ -181,19 +227,19 @@ public sealed class OverviewPage : Page
     {
         _language = language;
         var en = language == LanguageMode.English;
-        pageTitle.Text = en ? "Overview" : "概览";
-        cardTitles[0].Text = en ? "Today" : "今天";
-        cardTitles[1].Text = en ? "Yesterday" : "昨天";
-        cardTitles[2].Text = en ? "This week" : "本周";
-        cardTitles[3].Text = en ? "This month" : "本月";
-        cardSubs[0].Text = en ? "Active time" : "活跃时间";
-        cardSubs[1].Text = en ? "Active time" : "活跃时间";
-        cardSubs[2].Text = en ? "Monday to today" : "周一至今天";
-        cardSubs[3].Text = en ? "Accumulated this month" : "本月累计";
-        trendTitle.Text = en ? "Last 30 days" : "最近 30 天";
+        var hant = language == LanguageMode.TraditionalChinese;
+        pageTitle.Text = en ? "Overview" : hant ? "概覽" : "概览";
+        cardTitles[0].Text = en ? "Today" : hant ? "今天" : "今天";
+        cardTitles[1].Text = en ? "Yesterday" : hant ? "昨天" : "昨天";
+        cardTitles[2].Text = en ? "This week" : hant ? "本週" : "本周";
+        cardTitles[3].Text = en ? "This month" : hant ? "本月" : "本月";
+        cardSubs[0].Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
+        cardSubs[1].Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
+        cardSubs[2].Text = en ? "Monday to today" : hant ? "週一至今天" : "周一至今天";
+        cardSubs[3].Text = en ? "Accumulated this month" : hant ? "本月累計" : "本月累计";
+        trendTitle.Text = en ? "Last 30 days" : hant ? "最近 30 天" : "最近 30 天";
         UpdateSnapshot(_lastSnapshot ?? new Snapshot());
     }
-
     public void UpdateSnapshot(Snapshot s)
     {
         _lastSnapshot = s;
@@ -203,31 +249,37 @@ public sealed class OverviewPage : Page
         values[3].Text = UiHelpers.Format(s.month, _language);
 
         var name = string.IsNullOrWhiteSpace(s.current_app) ? "—" :
-            UiHelpers.FriendlyName(new AppStat { name = s.current_app });
+            UiHelpers.FriendlyName(new AppStat { name = s.current_app }, _language);
         if (s.locked)
         {
             status.Severity = InfoBarSeverity.Warning;
-            status.Title = _language == LanguageMode.English ? "Currently locked" : "当前已锁定";
+            status.Title = _language == LanguageMode.English ? "Currently locked" : _language == LanguageMode.TraditionalChinese ? "目前已鎖定" : "当前已锁定";
             status.Message = _language == LanguageMode.English
                 ? $"Usage tracking paused    CPU {s.cpu:F1}%    Memory {s.memory_mb} MB"
-                : $"已暂停记录使用时间    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
+                : _language == LanguageMode.TraditionalChinese
+                    ? $"已暫停記錄使用時間    CPU {s.cpu:F1}%    記憶體 {s.memory_mb} MB"
+                    : $"已暂停记录使用时间    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
         }
         else if (!s.active_now)
         {
             status.Severity = InfoBarSeverity.Informational;
-            status.Title = _language == LanguageMode.English ? "Inactive" : "暂未检测到活动";
+            status.Title = _language == LanguageMode.English ? "Inactive" : _language == LanguageMode.TraditionalChinese ? "尚未偵測到活動" : "暂未检测到活动";
             var idle = s.idle_seconds;
             status.Message = _language == LanguageMode.English
                 ? $"No active input for {UiHelpers.FormatIdle(idle, _language)}    CPU {s.cpu:F1}%    Memory {s.memory_mb} MB"
-                : $"连续 {UiHelpers.FormatIdle(idle, _language)} 无活动输入    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
+                : _language == LanguageMode.TraditionalChinese
+                    ? $"連續 {UiHelpers.FormatIdle(idle, _language)} 無活動輸入    CPU {s.cpu:F1}%    記憶體 {s.memory_mb} MB"
+                    : $"连续 {UiHelpers.FormatIdle(idle, _language)} 无活动输入    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
         }
         else
         {
             status.Severity = InfoBarSeverity.Success;
-            status.Title = _language == LanguageMode.English ? "Recording usage time" : "正在记录使用时间";
+            status.Title = _language == LanguageMode.English ? "Recording usage time" : _language == LanguageMode.TraditionalChinese ? "正在記錄使用時間" : "正在记录使用时间";
             status.Message = _language == LanguageMode.English
                 ? $"Current app: {name}    CPU {s.cpu:F1}%    Memory {s.memory_mb} MB"
-                : $"当前应用：{name}    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
+                : _language == LanguageMode.TraditionalChinese
+                    ? $"目前應用程式：{name}    CPU {s.cpu:F1}%    記憶體 {s.memory_mb} MB"
+                    : $"当前应用：{name}    CPU {s.cpu:F1}%    内存 {s.memory_mb} MB";
         }
         if (!statusClosed) status.IsOpen = true;
 
@@ -237,7 +289,7 @@ public sealed class OverviewPage : Page
         var average = days.Length == 0 ? 0 : total / days.Length;
         trendSummary.Text = _language == LanguageMode.English
             ? $"Total {UiHelpers.Format(total, _language)}  ·  Daily average {UiHelpers.Format(average, _language)}"
-            : $"30 天累计 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}";
+            : _language == LanguageMode.TraditionalChinese ? $"30 天累計 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}" : $"30 天累计 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}";
 
         for (int i = 0; i < trendBars.Length; i++)
         {
@@ -269,7 +321,7 @@ public sealed class OverviewPage : Page
             ? (_language == LanguageMode.English
                 ? $"{days[index].label}: {UiHelpers.Format(days[index].seconds, _language)}"
                 : $"{days[index].label}：{UiHelpers.Format(days[index].seconds, _language)}")
-            : (_language == LanguageMode.English ? "No usage record" : "暂无使用记录");
+            : (_language == LanguageMode.English ? "No usage record" : _language == LanguageMode.TraditionalChinese ? "暫無使用記錄" : "暂无使用记录");
 
         trendHoverCard.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
         var popupWidth = trendHoverCard.DesiredSize.Width;
@@ -337,7 +389,7 @@ public sealed class AppsPage : Page
     readonly TextBlock title = new();
     readonly Dictionary<string, AppRow> rows = new(StringComparer.OrdinalIgnoreCase);
     Snapshot snapshot = new();
-    LanguageMode _language = LanguageMode.Chinese;
+    LanguageMode _language = LanguageMode.SimplifiedChinese;
     UIColor _accentColor = ThemeManager.DefaultAccent;
 
     public AppsPage()
@@ -390,19 +442,22 @@ public sealed class AppsPage : Page
 
     public void ApplyLanguage(LanguageMode language)
     {
-        title.Text = language == LanguageMode.English ? "App usage" : "应用使用时间";
-        search.PlaceholderText = language == LanguageMode.English ? "Search apps" : "搜索应用";
+        _language = language;
+        var en = language == LanguageMode.English;
+        var hant = language == LanguageMode.TraditionalChinese;
+        title.Text = en ? "App usage" : hant ? "應用程式使用時間" : "应用使用时间";
+        search.PlaceholderText = en ? "Search apps" : hant ? "搜尋應用程式" : "搜索应用";
         var index = period.SelectedIndex;
         period.Items.Clear();
-        var items = language == LanguageMode.English
+        var items = en
             ? new[] { "Today", "This week", "This month", "Last 6 months", "Last year", "All time" }
-            : new[] { "今天", "本周", "本月", "近半年", "近一年", "全部时间" };
+            : hant
+                ? new[] { "今天", "本週", "本月", "近半年", "近一年", "全部時間" }
+                : new[] { "今天", "本周", "本月", "近半年", "近一年", "全部时间" };
         foreach (var item in items) period.Items.Add(item);
         period.SelectedIndex = Math.Clamp(index, 0, items.Length - 1);
-        _language = language;
         RenderList();
     }
-
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
@@ -424,7 +479,7 @@ public sealed class AppsPage : Page
             5 => snapshot.apps_all,
             _ => snapshot.apps
         };
-        var apps = source.Where(x => UiHelpers.FriendlyName(x).Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var apps = source.Where(x => UiHelpers.FriendlyName(x, _language).Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase)).ToArray();
         var wanted = new HashSet<string>(apps.Select(Key), StringComparer.OrdinalIgnoreCase);
 
         foreach (var key in rows.Keys.Where(k => !wanted.Contains(k)).ToArray()) {
@@ -504,7 +559,7 @@ public sealed class AppsPage : Page
 
         public void Update(AppStat app, long today, LanguageMode language)
         {
-            name.Text = UiHelpers.FriendlyName(app);
+            name.Text = UiHelpers.FriendlyName(app, language);
             path.Text = app.name + (string.IsNullOrWhiteSpace(app.exe_path) ? "" : " · " + app.exe_path);
             time.Text = UiHelpers.Format(app.seconds, language);
             bar.Value = Math.Min(100, app.seconds * 100.0 / Math.Max(1, today));
@@ -562,7 +617,7 @@ public sealed class StatsPage : Page
     readonly TextBlock topTitle = new();
     readonly ComboBox period = new();
     readonly TextBlock periodHint = new();
-    LanguageMode _language = LanguageMode.Chinese;
+    LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
     UIColor _accentColor = ThemeManager.DefaultAccent;
     const double TrendColumnWidth = 60.0;
@@ -763,30 +818,50 @@ public sealed class StatsPage : Page
     {
         _language = language;
         var en = language == LanguageMode.English;
-        title.Text = en ? "Statistics" : "统计";
+        var hant = language == LanguageMode.TraditionalChinese;
+        title.Text = en ? "Statistics" : hant ? "統計" : "统计";
         description.Text = en
             ? "Review recent screen-time trends and application usage from the local history."
+            : hant ? "查看本機歷史記錄中的近期使用時間趨勢與應用程式使用情況。"
             : "查看本地历史记录中的近期使用时长趋势与应用使用情况。";
-        periodHint.Text = en ? "All statistics are calculated from local records." : "所有统计数据均来自本机历史记录。";
+        periodHint.Text = en ? "All statistics are calculated from local records." : hant ? "所有統計資料均來自本機歷史記錄。" : "所有统计数据均来自本机历史记录。";
         var selectedPeriod = Math.Clamp(period.SelectedIndex < 0 ? 0 : period.SelectedIndex, 0, 4);
         period.Items.Clear();
-        period.Items.Add(en ? "Last 30 days" : "最近 30 天");
-        period.Items.Add(en ? "Last 90 days" : "最近 90 天");
-        period.Items.Add(en ? "Last 6 months" : "近半年");
-        period.Items.Add(en ? "Last year" : "近一年");
-        period.Items.Add(en ? "All time" : "全部时间");
+        if (en)
+        {
+            period.Items.Add("Last 30 days");
+            period.Items.Add("Last 90 days");
+            period.Items.Add("Last 6 months");
+            period.Items.Add("Last year");
+            period.Items.Add("All time");
+        }
+        else if (hant)
+        {
+            period.Items.Add("最近 30 天");
+            period.Items.Add("最近 90 天");
+            period.Items.Add("近半年");
+            period.Items.Add("近一年");
+            period.Items.Add("全部時間");
+        }
+        else
+        {
+            period.Items.Add("最近 30 天");
+            period.Items.Add("最近 90 天");
+            period.Items.Add("近半年");
+            period.Items.Add("近一年");
+            period.Items.Add("全部时间");
+        }
         period.SelectedIndex = selectedPeriod;
         trendHoverCard.Visibility = Visibility.Collapsed;
         _hoveredTrendIndex = -1;
-        trendTitle.Text = en ? "Daily usage trend" : "每日使用趋势";
-        topTitle.Text = en ? "Top apps" : "应用排行";
-        summaryTitles[0].Text = en ? "Period total" : "周期总计";
-        summaryTitles[1].Text = en ? "Daily average" : "日均使用";
-        summaryTitles[2].Text = en ? "Active days" : "活跃天数";
-        summaryTitles[3].Text = en ? "Peak day" : "最高单日";
+        trendTitle.Text = en ? "Daily usage trend" : hant ? "每日使用趨勢" : "每日使用趋势";
+        topTitle.Text = en ? "Top apps" : hant ? "應用程式排行" : "应用排行";
+        summaryTitles[0].Text = en ? "Period total" : hant ? "週期總計" : "周期总计";
+        summaryTitles[1].Text = en ? "Daily average" : hant ? "日均使用" : "日均使用";
+        summaryTitles[2].Text = en ? "Active days" : hant ? "活躍天數" : "活跃天数";
+        summaryTitles[3].Text = en ? "Peak day" : hant ? "最高單日" : "最高单日";
         RenderCurrentSnapshot();
     }
-
     public void UpdateSnapshot(Snapshot s)
     {
         _lastSnapshot = s;
@@ -847,7 +922,7 @@ public sealed class StatsPage : Page
             _ => _lastSnapshot.apps_30_days
         };
         var topApps = apps.Take(10).ToArray();
-        topEmpty.Text = _language == LanguageMode.English ? "No app usage recorded in this period." : "该时间段暂无应用使用记录。";
+        topEmpty.Text = _language == LanguageMode.English ? "No app usage recorded in this period." : _language == LanguageMode.TraditionalChinese ? "此期間沒有應用程式使用記錄。" : "该时间段暂无应用使用记录。";
         topEmpty.Visibility = topApps.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         while (topRows.Count < topApps.Length)
@@ -867,7 +942,7 @@ public sealed class StatsPage : Page
         {
             var app = topApps[i];
             var row = topRows[i];
-            row.Name.Text = UiHelpers.FriendlyName(app);
+            row.Name.Text = UiHelpers.FriendlyName(app, _language);
             row.Value.Text = UiHelpers.Format(app.seconds, _language);
             UiHelpers.SetAppIcon(row.Icon, app);
         }
@@ -1043,7 +1118,8 @@ public sealed class SettingsPage : Page
     readonly ComboBox theme, language;
     ColorPicker colorPicker = null!;
     readonly TextBlock pageTitle, generalTitle, appearanceTitle, aboutTitle, startupText, languageTitle, aboutText;
-    readonly TextBlock paletteTitle, customColorTitle, termsTitle, accentHint;
+    readonly TextBlock paletteTitle, customColorTitle, termsTitle, accentHint, dataTitle, dataHint;
+    readonly Button exportDataButton, importDataButton, deleteAllDataButton;
     readonly Expander themeColorsExpander;
     readonly StackPanel themeContent;
     readonly Grid colorPickerHost;
@@ -1063,6 +1139,9 @@ public sealed class SettingsPage : Page
     public event EventHandler<ThemeMode>? ThemeModeChanged;
     public event EventHandler<LanguageMode>? LanguageChanged;
     public event EventHandler<UIColor>? AccentColorChanged;
+    public event EventHandler? ExportDataRequested;
+    public event EventHandler? ImportDataRequested;
+    public event EventHandler? DeleteAllDataRequested;
 
     public SettingsPage(ThemeMode mode, LanguageMode languageMode, UIColor accentColor)
     {
@@ -1207,6 +1286,22 @@ public sealed class SettingsPage : Page
         ApplyComboBoxAccent(language, _accentColor);
         p.Children.Add(language);
 
+        dataTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        dataHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+        exportDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        importDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        deleteAllDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        exportDataButton.Click += (_, _) => ExportDataRequested?.Invoke(this, EventArgs.Empty);
+        importDataButton.Click += (_, _) => ImportDataRequested?.Invoke(this, EventArgs.Empty);
+        deleteAllDataButton.Click += (_, _) => DeleteAllDataRequested?.Invoke(this, EventArgs.Empty);
+        var dataButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        dataButtons.Children.Add(exportDataButton);
+        dataButtons.Children.Add(importDataButton);
+        dataButtons.Children.Add(deleteAllDataButton);
+        p.Children.Add(dataTitle);
+        p.Children.Add(dataHint);
+        p.Children.Add(dataButtons);
+
         termsTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         p.Children.Add(termsTitle);
         termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
@@ -1233,7 +1328,7 @@ public sealed class SettingsPage : Page
             IsMoreButtonVisible = true,
             HorizontalAlignment = HorizontalAlignment.Left,
             ColorSpectrumComponents = ColorSpectrumComponents.HueSaturation,
-            Language = _language == LanguageMode.English ? "en-US" : "zh-CN"
+            Language = _language == LanguageMode.English ? "en-US" : _language == LanguageMode.TraditionalChinese ? "zh-TW" : "zh-CN"
         };
 
         colorPickerHost.Children.Insert(0, colorPicker);
@@ -1462,51 +1557,60 @@ public sealed class SettingsPage : Page
 
     private static string GetLocalizedSpectrumColorName(double hue, double saturation, double value, LanguageMode language)
     {
-        var english = language == LanguageMode.English;
-        if (value < 0.16) return english ? "Black" : "黑色";
+        var en = language == LanguageMode.English;
+        var hant = language == LanguageMode.TraditionalChinese;
+        string zh(string s, string t) => hant ? t : s;
+        if (value < 0.16) return en ? "Black" : zh("黑色", "黑色");
         if (saturation < 0.08)
-            return value > 0.85 ? (english ? "White" : "白色") : (english ? "Gray" : "灰色");
-        if (hue < 15 || hue >= 345) return english ? "Red" : "红色";
-        if (hue < 45) return english ? "Orange" : "橙色";
-        if (hue < 75) return english ? "Yellow" : "黄色";
-        if (hue < 165) return english ? "Green" : "绿色";
-        if (hue < 195) return english ? "Cyan" : "青色";
-        if (hue < 255) return english ? "Blue" : "蓝色";
-        if (hue < 285) return english ? "Purple" : "紫色";
-        if (hue < 330) return english ? "Magenta" : "洋红色";
-        return english ? "Pink" : "粉色";
+            return value > 0.85 ? (en ? "White" : zh("白色", "白色")) : (en ? "Gray" : zh("灰色", "灰色"));
+        if (hue < 15 || hue >= 345) return en ? "Red" : zh("红色", "紅色");
+        if (hue < 45) return en ? "Orange" : zh("橙色", "橙色");
+        if (hue < 75) return en ? "Yellow" : zh("黄色", "黃色");
+        if (hue < 165) return en ? "Green" : zh("绿色", "綠色");
+        if (hue < 195) return en ? "Cyan" : zh("青色", "青色");
+        if (hue < 255) return en ? "Blue" : zh("蓝色", "藍色");
+        if (hue < 285) return en ? "Purple" : zh("紫色", "紫色");
+        if (hue < 330) return en ? "Magenta" : zh("洋红色", "洋紅色");
+        return en ? "Pink" : zh("粉色", "粉紅色");
     }
 
     private void LocalizeColorPickerText()
     {
         if (colorPicker is null) return;
 
-        var english = _language == LanguageMode.English;
-        colorPicker.Language = english ? "en-US" : "zh-CN";
-        var labels = english
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        colorPicker.Language = en ? "en-US" : hant ? "zh-TW" : "zh-CN";
+        var labels = en
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["更多"] = "More", ["更少"] = "Less", ["红色"] = "Red", ["绿色"] = "Green",
+                ["更多"] = "More", ["更多功能"] = "More", ["更少"] = "Less", ["红色"] = "Red", ["绿色"] = "Green",
                 ["蓝色"] = "Blue", ["青色"] = "Cyan", ["紫色"] = "Purple", ["洋红色"] = "Magenta",
                 ["粉色"] = "Pink", ["橙色"] = "Orange", ["黄色"] = "Yellow", ["白色"] = "White", ["灰色"] = "Gray",
                 ["黑色"] = "Black", ["浅蓝色"] = "Light blue", ["浅绿色"] = "Light green",
                 ["色调"] = "Hue", ["饱和度"] = "Saturation", ["值"] = "Value",
                 ["透明度"] = "Alpha", ["十六进制"] = "Hex", ["颜色"] = "Color"
             }
-            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["More"] = "更多", ["Less"] = "更少", ["Red"] = "红色", ["Green"] = "绿色",
-                ["Blue"] = "蓝色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋红色",
-                ["Pink"] = "粉色", ["Orange"] = "橙色", ["Yellow"] = "黄色", ["White"] = "白色", ["Gray"] = "灰色",
-                ["Black"] = "黑色", ["Light blue"] = "浅蓝色", ["Light green"] = "浅绿色",
-                ["Hue"] = "色调", ["Saturation"] = "饱和度", ["Value"] = "值",
-                ["Alpha"] = "透明度", ["Hex"] = "十六进制", ["Color"] = "颜色"
-            };
+            : hant
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["更多"] = "更多", ["More"] = "更多", ["更少"] = "更少", ["紅色"] = "紅色", ["红色"] = "紅色", ["綠色"] = "綠色", ["绿色"] = "綠色",
+                    ["藍色"] = "藍色", ["蓝色"] = "藍色", ["青色"] = "青色", ["紫色"] = "紫色", ["洋紅色"] = "洋紅色", ["洋红色"] = "洋紅色",
+                    ["粉紅色"] = "粉紅色", ["粉色"] = "粉紅色", ["橙色"] = "橙色", ["黄色"] = "黃色", ["黃色"] = "黃色",
+                    ["白色"] = "白色", ["灰色"] = "灰色", ["黑色"] = "黑色", ["浅蓝色"] = "淺藍色", ["浅绿色"] = "淺綠色",
+                    ["色调"] = "色相", ["色調"] = "色相", ["饱和度"] = "飽和度", ["值"] = "明度", ["透明度"] = "透明度",
+                    ["十六进制"] = "十六進位", ["十六進制"] = "十六進位", ["颜色"] = "顏色", ["顏色"] = "顏色",
+                    ["Red"] = "紅色", ["Green"] = "綠色", ["Blue"] = "藍色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋紅色", ["Pink"] = "粉紅色", ["Orange"] = "橙色", ["Yellow"] = "黃色", ["White"] = "白色", ["Gray"] = "灰色", ["Black"] = "黑色", ["Light blue"] = "淺藍色", ["Light green"] = "淺綠色", ["Hue"] = "色相", ["Saturation"] = "飽和度", ["Value"] = "明度", ["Alpha"] = "透明度", ["Hex"] = "十六進位", ["Color"] = "顏色", ["Less"] = "更少"
+                }
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["More"] = "更多", ["Less"] = "更少", ["Red"] = "红色", ["Green"] = "绿色", ["Blue"] = "蓝色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋红色", ["Pink"] = "粉色", ["Orange"] = "橙色", ["Yellow"] = "黄色", ["White"] = "白色", ["Gray"] = "灰色", ["Black"] = "黑色", ["Light blue"] = "浅蓝色", ["Light green"] = "浅绿色", ["Hue"] = "色调", ["Saturation"] = "饱和度", ["Value"] = "值", ["Alpha"] = "透明度", ["Hex"] = "十六进制", ["Color"] = "颜色"
+                };
 
         ReplaceColorPickerStrings(colorPicker, labels);
     }
 
-    static void ReplaceColorPickerStrings(DependencyObject root, Dictionary<string, string> labels)
+    private static void ReplaceColorPickerStrings(DependencyObject root, Dictionary<string, string> labels)
     {
         if (root is TextBlock textBlock)
         {
@@ -1640,46 +1744,60 @@ public sealed class SettingsPage : Page
     public void SetLanguage(LanguageMode mode)
     {
         _language = mode;
-        var en = mode == LanguageMode.English;
         updatingLanguage = true;
         language.Items.Clear();
-        language.Items.Add("中文");
-        language.Items.Add("English");
+        language.Items.Add(UiText.LanguageName(LanguageMode.SimplifiedChinese));
+        language.Items.Add(UiText.LanguageName(LanguageMode.TraditionalChinese));
+        language.Items.Add(UiText.LanguageName(LanguageMode.English));
         language.SelectedIndex = (int)mode;
         updatingLanguage = false;
 
-        pageTitle.Text = en ? "Settings" : "设置";
-        generalTitle.Text = en ? "General" : "常规";
-        startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : "登录 Windows 后在后台静默启动";
-        appearanceTitle.Text = en ? "Appearance" : "外观";
-        themeColorsExpander.Header = en ? "Theme colors & custom color" : "主题色彩与自定义颜色";
-        paletteTitle.Text = en ? "Preset colors" : "预设主题色";
-        customColorTitle.Text = en ? "Custom color" : "自定义颜色";
+        var en = mode == LanguageMode.English;
+        var hant = mode == LanguageMode.TraditionalChinese;
+        pageTitle.Text = en ? "Settings" : hant ? "設定" : "设置";
+        generalTitle.Text = en ? "General" : hant ? "一般" : "常规";
+        startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : hant ? "登入 Windows 後在背景靜默啟動 ScreenTime RS" : "登录 Windows 后在后台静默启动";
+        appearanceTitle.Text = en ? "Appearance" : hant ? "外觀" : "外观";
+        themeColorsExpander.Header = en ? "Theme colors & custom color" : hant ? "主題色彩與自訂顏色" : "主题色彩与自定义颜色";
+        paletteTitle.Text = en ? "Preset colors" : hant ? "預設主題色" : "预设主题色";
+        customColorTitle.Text = en ? "Custom color" : hant ? "自訂顏色" : "自定义颜色";
         accentHint.Text = en
             ? "Choose a preset or pick any custom color. Changes apply immediately across the interface."
+            : hant ? "選擇預設主題色或自由取色，修改後會立即套用到整個介面。"
             : "选择预设主题色或自由取色，修改后会立即应用到整个界面。";
-        languageTitle.Text = en ? "Language" : "语言";
-        termsTitle.Text = en ? "Terms & Privacy" : "使用条款与隐私";
-        termsButton.Content = en ? "View terms and privacy policy" : "查看用户条款与隐私政策";
-        aboutTitle.Text = en ? "About" : "关于";
+        languageTitle.Text = en ? "Language" : hant ? "語言" : "语言";
+        dataTitle.Text = en ? "Data management" : hant ? "資料管理" : "数据管理";
+        dataHint.Text = en
+            ? "Export or import local usage history. Deleting all data is permanent and requires confirmation."
+            : hant ? "匯出或匯入本機使用歷史記錄。刪除所有資料為永久操作，需經確認。"
+            : "导出或导入本机使用历史记录。删除全部数据为永久操作，需要确认。";
+        exportDataButton.Content = en ? "Export data" : hant ? "匯出資料" : "导出数据";
+        importDataButton.Content = en ? "Import data" : hant ? "匯入資料" : "导入数据";
+        deleteAllDataButton.Content = en ? "Delete all data" : hant ? "刪除所有資料" : "删除全部数据";
+        deleteAllDataButton.Background = new SolidColorBrush(UIColor.FromArgb(230, 196, 43, 28));
+        deleteAllDataButton.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        termsTitle.Text = en ? "Terms & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私";
+        termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看用户条款与隐私政策";
+        aboutTitle.Text = en ? "About" : hant ? "關於" : "关于";
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.6.2\nRust monitoring core + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.6.2\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS\nVersion 0.7.0\nRust monitoring core + WinUI 3 / Fluent UI"
+            : hant ? "ScreenTime RS\n版本 0.7.0\nRust 監控核心 + WinUI 3 / Fluent UI"
+            : "ScreenTime RS\n版本 0.7.0\nRust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
         theme.Items.Clear();
         if (en)
         {
-            theme.Items.Add("Follow system");
-            theme.Items.Add("Light");
-            theme.Items.Add("Dark");
+            theme.Items.Add("Follow system"); theme.Items.Add("Light"); theme.Items.Add("Dark");
+        }
+        else if (hant)
+        {
+            theme.Items.Add("跟隨系統"); theme.Items.Add("淺色"); theme.Items.Add("深色");
         }
         else
         {
-            theme.Items.Add("跟随系统");
-            theme.Items.Add("浅色");
-            theme.Items.Add("深色");
+            theme.Items.Add("跟随系统"); theme.Items.Add("浅色"); theme.Items.Add("深色");
         }
         theme.SelectedIndex = Math.Clamp(themeIndex, 0, 2);
         updatingTheme = false;
@@ -1692,27 +1810,29 @@ public sealed class SettingsPage : Page
     private async void TermsButton_Click(object sender, RoutedEventArgs e)
     {
         var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
         var dialog = new ContentDialog
         {
-            Title = en ? "Terms of Use & Privacy" : "用户条款与隐私政策",
+            Title = en ? "Terms of Use & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私政策",
             Content = new ScrollViewer
             {
                 MaxHeight = 520,
                 Content = new TextBlock
                 {
-                    Text = en ? TermsEnglish : TermsChinese,
+                    Text = en ? TermsEnglish : hant ? TermsTraditional : TermsChinese,
                     TextWrapping = TextWrapping.Wrap,
                     LineHeight = 22
                 }
             },
-            CloseButtonText = en ? "Close" : "关闭",
+            CloseButtonText = en ? "Close" : hant ? "關閉" : "关闭",
             XamlRoot = XamlRoot
         };
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.6.2";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.6.2";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.7.0";
+    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.7.0";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.7.0";
 
     static bool StartupEnabled()
     {

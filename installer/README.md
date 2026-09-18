@@ -1,15 +1,15 @@
-# ScreenTime RS v0.6.2 安装程序
+# ScreenTime RS v0.7.0 Installer
 
-构建项目根目录：
+Build from the project root:
 
 ```powershell
 .\build-installer.bat
 ```
 
-输出：
+Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.6.2-Setup.exe
+installer-output\ScreenTimeRS-v0.7.0-Setup.exe
 ```
 
-安装程序支持桌面快捷方式、开始菜单快捷方式以及登录 Windows 后自动启动。
+The installer supports desktop and Start Menu shortcuts, optional Windows startup, and the application uninstaller.
