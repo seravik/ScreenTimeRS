@@ -27,6 +27,11 @@ public enum ThemeMode
 
 public sealed class NavigationResizeHandle : Grid
 {
+
+    public NavigationResizeHandle()
+    {
+    }
+
     public void SetResizeCursor()
     {
         ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
@@ -494,10 +499,10 @@ public sealed partial class MainWindow : Window
         var en = uiLanguage == LanguageMode.English;
         var hant = uiLanguage == LanguageMode.TraditionalChinese;
         var fullText = en
-            ? "TERMS OF USE\n\nVersion: v0.7.1\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.7.1\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
+            ? "TERMS OF USE\n\nVersion: v0.7.2\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.7.2\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
             : hant
-                ? "使用條款\n\n版本：v0.7.1\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.7.1\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
-                : "使用条款\n\n版本：v0.7.1\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.7.1\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+                ? "使用條款\n\n版本：v0.7.2\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.7.2\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
+                : "使用条款\n\n版本：v0.7.2\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.7.2\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
 
         var content = new ScrollViewer
         {
@@ -512,6 +517,7 @@ public sealed partial class MainWindow : Window
 
         var dialog = new ContentDialog
         {
+            RequestedTheme = RootGrid.ActualTheme,
             Title = en ? "Terms of Use & Privacy Policy" : hant ? "使用條款與隱私權政策" : "用户条款与隐私政策",
             Content = content,
             PrimaryButtonText = en ? "Accept and Continue" : hant ? "同意並繼續" : "同意并继续",
@@ -662,11 +668,13 @@ public sealed partial class MainWindow : Window
     }
 
 
+
     private void NavResizeHandle_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (!Nav.IsPaneOpen) return;
         var point = e.GetCurrentPoint(NavResizeCanvas);
         if (!point.Properties.IsLeftButtonPressed) return;
+
         _resizingPane = true;
         _resizePointerId = point.PointerId;
         NavResizeHandle.CapturePointer(e.Pointer);
@@ -676,21 +684,27 @@ public sealed partial class MainWindow : Window
     private void NavResizeHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!_resizingPane || e.Pointer.PointerId != _resizePointerId) return;
+
         var point = e.GetCurrentPoint(NavResizeCanvas);
         var width = Math.Clamp(point.Position.X, 220, 480);
         Nav.OpenPaneLength = width;
         _savedPaneLength = width;
-        UpdateNavigationResizeHandle();
+
+        // Keep the transparent hit zone stationary during a captured drag.
+        // Repositioning it on every move can make the pointer repeatedly
+        // enter/leave the boundary and cause cursor flicker.
         e.Handled = true;
     }
 
     private void NavResizeHandle_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (!_resizingPane || e.Pointer.PointerId != _resizePointerId) return;
+
         _resizingPane = false;
         _savedPaneLength = Nav.OpenPaneLength;
         SaveNavigationPaneLength(_savedPaneLength);
         try { NavResizeHandle.ReleasePointerCapture(e.Pointer); } catch { }
+        UpdateNavigationResizeHandle();
         e.Handled = true;
     }
 
@@ -712,6 +726,7 @@ public sealed partial class MainWindow : Window
         _savedPaneLength = Nav.OpenPaneLength;
         SaveNavigationPaneLength(_savedPaneLength);
         try { NavResizeHandle.ReleasePointerCaptures(); } catch { }
+        UpdateNavigationResizeHandle();
     }
 
     private void UpdateNavigationResizeHandle()
@@ -719,8 +734,8 @@ public sealed partial class MainWindow : Window
         if (Nav.IsPaneOpen)
         {
             NavResizeHandle.Visibility = Visibility.Visible;
-            NavResizeHandle.Height = Math.Max(1, RootGrid.ActualHeight - 42);
-            Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 11));
+            NavResizeHandle.Height = Math.Max(1, NavResizeCanvas.ActualHeight);
+            Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 18));
             Canvas.SetTop(NavResizeHandle, 0);
         }
         else
@@ -838,28 +853,34 @@ public sealed partial class MainWindow : Window
         // the destructive button color.
         var dialog = new ContentDialog
         {
+            RequestedTheme = RootGrid.ActualTheme,
             Title = UiText.DeleteTitle(UiLanguage),
             Content = dialogContent,
             PrimaryButtonText = UiText.DeleteAction(UiLanguage),
             CloseButtonText = UiText.Cancel(UiLanguage),
-            PrimaryButtonStyle = CreateDangerButtonStyle(),
+            PrimaryButtonStyle = null,
+            IsPrimaryButtonEnabled = false,
             XamlRoot = ContentFrame.XamlRoot
         };
 
-        dialog.PrimaryButtonClick += (_, args) =>
+        void UpdateDeleteButtonState()
         {
-            if (!string.Equals(input.Text.Trim(), code, StringComparison.Ordinal))
-            {
-                args.Cancel = true;
-                input.Focus(FocusState.Programmatic);
-            }
-        };
+            var valid = string.Equals(input.Text.Trim(), code, StringComparison.Ordinal);
+            dialog.IsPrimaryButtonEnabled = valid;
+            dialog.PrimaryButtonStyle = valid
+                ? CreateDangerButtonStyle()
+                : null;
+        }
+
+        input.TextChanged += (_, _) => UpdateDeleteButtonState();
+        UpdateDeleteButtonState();
 
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return;
 
         var finalDialog = new ContentDialog
         {
+            RequestedTheme = RootGrid.ActualTheme,
             Title = UiText.DeleteFinalTitle(UiLanguage),
             Content = new TextBlock
             {
@@ -935,6 +956,7 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new ContentDialog
         {
+            RequestedTheme = RootGrid.ActualTheme,
             Title = success ? UiText.Done(UiLanguage) : UiText.Error(UiLanguage),
             Content = success ? successText : failedText,
             CloseButtonText = UiText.Close(UiLanguage),
@@ -947,6 +969,7 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new ContentDialog
         {
+            RequestedTheme = RootGrid.ActualTheme,
             Title = title,
             Content = content,
             PrimaryButtonText = primary,

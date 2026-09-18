@@ -1,6 +1,6 @@
 # ScreenTime RS Privacy Policy
 
-Version: v0.7.1
+Version: v0.7.2
 
 1. ScreenTime RS stores its core usage statistics locally and does not actively upload them to a remote server.
 2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.
