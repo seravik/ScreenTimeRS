@@ -1,3 +1,8 @@
+## v0.7.3
+
+### Improved
+- Restored the compact navigation bar resize interaction for more precise and predictable width adjustment.
+
 ## v0.7.2
 - 修复深色模式下数据管理对话框未正确跟随应用主题的问题。
 

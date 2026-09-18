@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-echo Building ScreenTime RS v0.7.2...
+echo Building ScreenTime RS v0.7.3...
 call build-windows.bat
 if errorlevel 1 exit /b 1
 
@@ -15,11 +15,11 @@ if not exist "%ISCC%" (
 
 if exist installer-output rmdir /s /q installer-output
 mkdir installer-output
-"%ISCC%" installer\ScreenTimeRS-v0.7.2.iss
+"%ISCC%" installer\ScreenTimeRS-v0.7.3.iss
 if errorlevel 1 exit /b 1
 
 echo.
 echo ========================================
-echo ScreenTime RS v0.7.2 installer complete!
-echo installer-output\ScreenTimeRS-v0.7.2-Setup.exe
+echo ScreenTime RS v0.7.3 installer complete!
+echo installer-output\ScreenTimeRS-v0.7.3-Setup.exe
 echo ========================================

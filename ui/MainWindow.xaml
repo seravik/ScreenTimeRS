@@ -40,10 +40,9 @@
                  The standard horizontal-resize cursor is the only visual cue. -->
             <Canvas x:Name="NavResizeCanvas" IsHitTestVisible="True">
                 <local:NavigationResizeHandle x:Name="NavResizeHandle"
-                        Width="36"
+                        Width="22"
                         Height="1"
                         Background="Transparent"
-                        Opacity="0"
                         HorizontalAlignment="Left"
                         PointerPressed="NavResizeHandle_PointerPressed"
                         PointerMoved="NavResizeHandle_PointerMoved"
