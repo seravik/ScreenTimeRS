@@ -454,8 +454,8 @@ public sealed partial class MainWindow : Window
 
         var en = _languageMode == LanguageMode.English;
         var fullText = en
-            ? "TERMS OF USE\n\nVersion: v0.5.3\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.5.3\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
-            : "使用条款\n\n版本：v0.5.3\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.5.3\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+            ? "TERMS OF USE\n\nVersion: v0.6.0\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.6.0\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
+            : "使用条款\n\n版本：v0.6.0\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.6.0\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
 
         var content = new ScrollViewer
         {
@@ -725,9 +725,16 @@ public sealed class Snapshot
     public AppStat[] apps_month { get; set; } = Array.Empty<AppStat>();
     public AppStat[] apps_half_year { get; set; } = Array.Empty<AppStat>();
     public AppStat[] apps_year { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_90_days { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_30_days { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_all { get; set; } = Array.Empty<AppStat>();
     public JsonDaily[] daily { get; set; } = Array.Empty<JsonDaily>();
+    public JsonDaily[] daily_year { get; set; } = Array.Empty<JsonDaily>();
+    public JsonDaily[] daily_all { get; set; } = Array.Empty<JsonDaily>();
     public bool locked { get; set; }
     public bool monitor_on { get; set; }
+    public bool active_now { get; set; }
+    public ulong idle_seconds { get; set; }
     public float cpu { get; set; }
     public ulong memory_mb { get; set; }
 }
@@ -748,6 +755,17 @@ public sealed class JsonDaily
 public static class UiHelpers
 {
     static readonly Dictionary<string, BitmapImage> AppIconCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static string FormatIdle(ulong seconds, LanguageMode language)
+    {
+        if (seconds < 60)
+            return language == LanguageMode.English ? $"{seconds}s" : $"{seconds}秒";
+        var minutes = seconds / 60;
+        if (minutes < 60)
+            return language == LanguageMode.English ? $"{minutes}m" : $"{minutes}分钟";
+        var hours = minutes / 60;
+        return language == LanguageMode.English ? $"{hours}h {minutes % 60}m" : $"{hours}小时 {minutes % 60}分钟";
+    }
 
     public static string Format(long s) => Format(s, LanguageMode.Chinese);
 

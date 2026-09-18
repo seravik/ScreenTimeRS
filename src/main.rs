@@ -12,6 +12,8 @@ use tray_icon::{menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem}, Icon, Tra
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW},
+    UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
+    System::SystemInformation::GetTickCount,
     UI::WindowsAndMessaging::{
         DispatchMessageW, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
         PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
@@ -40,9 +42,16 @@ struct Snapshot {
     apps_month: Vec<AppStat>,
     apps_half_year: Vec<AppStat>,
     apps_year: Vec<AppStat>,
+    apps_90_days: Vec<AppStat>,
+    apps_30_days: Vec<AppStat>,
+    apps_all: Vec<AppStat>,
     daily: Vec<(String, i64)>,
+    daily_year: Vec<(String, i64)>,
+    daily_all: Vec<(String, i64)>,
     locked: bool,
     monitor_on: bool,
+    active_now: bool,
+    idle_seconds: u64,
     cpu: f32,
     memory_mb: u64,
 }
@@ -103,12 +112,84 @@ impl Database {
         }))?;
         Ok(rows.filter_map(Result::ok).collect())
     }
+
+    fn apps_all(&self) -> Result<Vec<AppStat>> {
+        let c = self.conn()?;
+        let mut st = c.prepare(
+            "SELECT app,SUM(seconds),MAX(exe_path) FROM app_usage
+             GROUP BY app ORDER BY SUM(seconds) DESC")?;
+        let rows = st.query_map([], |r| Ok(AppStat {
+            name: r.get(0)?, seconds: r.get(1)?, exe_path: r.get(2).unwrap_or_default()
+        }))?;
+        Ok(rows.filter_map(Result::ok).collect())
+    }
     fn daily(&self, days: i64) -> Result<Vec<(String,i64)>> {
         let today = Local::now().date_naive();
-        let mut out = Vec::new();
-        for i in (0..days).rev() {
-            let d = today - ChronoDuration::days(i);
-            out.push((d.format("%m-%d").to_string(), self.range_total(d,d)?));
+        let start = today - ChronoDuration::days(days.saturating_sub(1));
+        self.daily_range(start, today)
+    }
+
+    fn daily_range(&self, start: NaiveDate, end: NaiveDate) -> Result<Vec<(String,i64)>> {
+        if start > end { return Ok(Vec::new()); }
+        let c = self.conn()?;
+        let mut totals = std::collections::HashMap::<NaiveDate, i64>::new();
+        let mut st = c.prepare(
+            "SELECT date, COALESCE(SUM(seconds),0) FROM app_usage WHERE date>=?1 AND date<=?2 GROUP BY date ORDER BY date"
+        )?;
+        let rows = st.query_map(params![start.to_string(), end.to_string()], |r| {
+            let date: String = r.get(0)?;
+            let seconds: i64 = r.get(1)?;
+            Ok((date, seconds))
+        })?;
+        for row in rows.flatten() {
+            if let Ok(date) = NaiveDate::parse_from_str(&row.0, "%Y-%m-%d") {
+                totals.insert(date, row.1);
+            }
+        }
+
+        let span = (end - start).num_days().max(0) + 1;
+        let mut out = Vec::with_capacity(span as usize);
+        for i in 0..span {
+            let d = start + ChronoDuration::days(i);
+            out.push((d.format("%m-%d").to_string(), *totals.get(&d).unwrap_or(&0)));
+        }
+        Ok(out)
+    }
+
+    fn daily_all(&self) -> Result<Vec<(String,i64)>> {
+        let today = Local::now().date_naive();
+        let c = self.conn()?;
+        let min_date: Option<String> = c.query_row(
+            "SELECT MIN(date) FROM app_usage",
+            [],
+            |r| r.get(0)
+        )?;
+        let Some(start_text) = min_date else { return Ok(Vec::new()); };
+        let Ok(start) = NaiveDate::parse_from_str(&start_text, "%Y-%m-%d") else {
+            return Ok(Vec::new());
+        };
+        if start > today { return Ok(Vec::new()); }
+
+        let mut totals = std::collections::HashMap::<NaiveDate, i64>::new();
+        let mut st = c.prepare(
+            "SELECT date, COALESCE(SUM(seconds),0) FROM app_usage WHERE date>=?1 AND date<=?2 GROUP BY date ORDER BY date"
+        )?;
+        let rows = st.query_map(params![start.to_string(), today.to_string()], |r| {
+            let date: String = r.get(0)?;
+            let seconds: i64 = r.get(1)?;
+            Ok((date, seconds))
+        })?;
+        for row in rows.flatten() {
+            if let Ok(date) = NaiveDate::parse_from_str(&row.0, "%Y-%m-%d") {
+                totals.insert(date, row.1);
+            }
+        }
+
+        let span = (today - start).num_days().max(0) + 1;
+        let mut out = Vec::with_capacity(span as usize);
+        for i in 0..span {
+            let d = start + ChronoDuration::days(i);
+            out.push((d.format("%Y-%m-%d").to_string(), *totals.get(&d).unwrap_or(&0)));
         }
         Ok(out)
     }
@@ -152,6 +233,23 @@ fn foreground(sys: &mut System) -> (String,String,String) {
 fn foreground(_: &mut System)->(String,String,String){("Unsupported".into(),"".into(),"".into())}
 
 #[cfg(windows)]
+fn idle_seconds() -> u64 {
+    unsafe {
+        let mut input = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+        if !GetLastInputInfo(&mut input).as_bool() {
+            return 0;
+        }
+        let now = GetTickCount();
+        now.wrapping_sub(input.dwTime) as u64 / 1000
+    }
+}
+#[cfg(not(windows))]
+fn idle_seconds() -> u64 { 0 }
+
+#[cfg(windows)]
 fn is_locked() -> bool {
     unsafe {
         let hwnd = windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow();
@@ -159,11 +257,15 @@ fn is_locked() -> bool {
     }
 }
 #[cfg(not(windows))]
-fn is_locked()->bool { false }
+fn is_locked() -> bool { false }
 
-// WM_SYSCOMMAND/monitor power state integration can be expanded with a hidden window.
-// For v0.2.3, the foreground-window signal is used as a conservative monitor-off/locked indicator.
-fn monitor_on(locked: bool) -> bool { !locked }
+const ACTIVE_IDLE_LIMIT_SECS: u64 = 300;
+fn monitor_on(locked: bool, idle: u64) -> bool {
+    !locked && idle < 60
+}
+fn active_now(locked: bool, idle: u64, app: &str) -> bool {
+    !locked && idle < ACTIVE_IDLE_LIMIT_SECS && !app.is_empty()
+}
 
 #[derive(serde::Serialize, Clone)]
 struct JsonApp { name: String, seconds: i64, exe_path: String }
@@ -175,8 +277,8 @@ struct JsonDaily { label: String, seconds: i64 }
 struct JsonSnapshot {
     current_app: String, current_window: String, today: i64, yesterday: i64, week: i64, month: i64,
     apps: Vec<JsonApp>, apps_week: Vec<JsonApp>, apps_month: Vec<JsonApp>,
-    apps_half_year: Vec<JsonApp>, apps_year: Vec<JsonApp>,
-    daily: Vec<JsonDaily>, locked: bool, monitor_on: bool, cpu: f32, memory_mb: u64,
+    apps_half_year: Vec<JsonApp>, apps_year: Vec<JsonApp>, apps_90_days: Vec<JsonApp>, apps_30_days: Vec<JsonApp>, apps_all: Vec<JsonApp>,
+    daily: Vec<JsonDaily>, daily_year: Vec<JsonDaily>, daily_all: Vec<JsonDaily>, locked: bool, monitor_on: bool, active_now: bool, idle_seconds: u64, cpu: f32, memory_mb: u64,
 }
 
 fn data_dir() -> Option<std::path::PathBuf> {
@@ -211,7 +313,12 @@ fn write_snapshot(s: &Snapshot) {
             apps_month:s.apps_month.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
             apps_half_year:s.apps_half_year.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
             apps_year:s.apps_year.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
-            daily:s.daily.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(), locked:s.locked, monitor_on:s.monitor_on, cpu:s.cpu, memory_mb:s.memory_mb,
+            apps_90_days:s.apps_90_days.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_30_days:s.apps_30_days.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            apps_all:s.apps_all.iter().map(|a| JsonApp{name:a.name.clone(),seconds:a.seconds,exe_path:a.exe_path.clone()}).collect(),
+            daily:s.daily.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(),
+            daily_year:s.daily_year.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(),
+            daily_all:s.daily_all.iter().map(|(label,seconds)| JsonDaily{label:label.clone(),seconds:*seconds}).collect(), locked:s.locked, monitor_on:s.monitor_on, active_now:s.active_now, idle_seconds:s.idle_seconds, cpu:s.cpu, memory_mb:s.memory_mb,
         };
         let tmp = path.with_extension("json.tmp");
         if let Ok(text) = serde_json::to_string(&data) {
@@ -230,46 +337,95 @@ struct Collector;
 impl Collector {
     fn start(db: Arc<Database>, snap: Arc<Mutex<Snapshot>>) {
         thread::spawn(move || {
-            let mut sys=System::new();
-            let mut last=Instant::now();
+            let mut sys = System::new();
+            let mut last = Instant::now();
+            let mut refresh_counter = 0u8;
+            let mut cached_week = Vec::new();
+            let mut cached_month = Vec::new();
+            let mut cached_half_year = Vec::new();
+            let mut cached_year = Vec::new();
+            let mut cached_90_days = Vec::new();
+            let mut cached_30_days = Vec::new();
+            let mut cached_all = Vec::new();
+            let mut cached_daily_year = Vec::new();
+            let mut cached_daily_all = Vec::new();
+
             loop {
                 thread::sleep(Duration::from_secs(1));
                 if shutdown_path().map(|p| p.exists()).unwrap_or(false) {
                     return;
                 }
-                let sec=last.elapsed().as_secs().clamp(1,2) as i64;
-                last=Instant::now();
-                let locked=is_locked();
-                let (app,title,exe_path)=foreground(&mut sys);
-                if !locked && !app.is_empty() {
-                    let _=db.add(&Local::now().date_naive().to_string(),&app,sec,&exe_path);
+
+                let sec = last.elapsed().as_secs().clamp(1, 2) as i64;
+                last = Instant::now();
+                let locked = is_locked();
+                let idle = idle_seconds();
+                let (app, title, exe_path) = foreground(&mut sys);
+                let active = active_now(locked, idle, &app);
+                if active {
+                    let _ = db.add(&Local::now().date_naive().to_string(), &app, sec, &exe_path);
                 }
+
                 sys.refresh_cpu_usage();
                 sys.refresh_memory();
-                let today=Local::now().date_naive();
-                let yesterday=today-ChronoDuration::days(1);
+
+                let now = Local::now();
+                let today = now.date_naive();
+                let yesterday = today - ChronoDuration::days(1);
                 let month_start = today.with_day(1).unwrap();
                 let week_start = today - ChronoDuration::days(today.weekday().num_days_from_monday() as i64);
                 let six_months_ago = today.checked_sub_months(Months::new(6)).unwrap_or(today);
+                let ninety_start = today - ChronoDuration::days(89);
+                let thirty_start = today - ChronoDuration::days(29);
                 let year_ago = today.checked_sub_months(Months::new(12)).unwrap_or(today);
-                let apps=db.apps_today().unwrap_or_default();
-                let apps_week=db.apps_range(week_start,today).unwrap_or_default();
-                let apps_month=db.apps_range(month_start,today).unwrap_or_default();
-                let apps_half_year=db.apps_range(six_months_ago,today).unwrap_or_default();
-                let apps_year=db.apps_range(year_ago,today).unwrap_or_default();
-                let daily=db.daily(14).unwrap_or_default();
-                let mut s=snap.lock().unwrap();
-                *s=Snapshot {
-                    current_app:app,current_window:title,
-                    today:db.range_total(today,today).unwrap_or(0),
-                    yesterday:db.range_total(yesterday,yesterday).unwrap_or(0),
-                    week:db.range_total(week_start,today).unwrap_or(0),
-                    month:db.range_total(month_start,today).unwrap_or(0),
-                    apps, apps_week, apps_month, apps_half_year, apps_year,
-                    daily,locked,monitor_on:monitor_on(locked),
-                    cpu:sys.global_cpu_usage(),memory_mb:sys.used_memory()/1024/1024
+
+                refresh_counter = refresh_counter.wrapping_add(1);
+                // Historical application lists are comparatively expensive; refresh them
+                // every five seconds while keeping today's data and system metrics live.
+                if refresh_counter % 5 == 0 || (cached_week.is_empty() && cached_all.is_empty()) {
+                    cached_week = db.apps_range(week_start, today).unwrap_or_default();
+                    cached_month = db.apps_range(month_start, today).unwrap_or_default();
+                    cached_half_year = db.apps_range(six_months_ago, today).unwrap_or_default();
+                    cached_year = db.apps_range(year_ago, today).unwrap_or_default();
+                    cached_90_days = db.apps_range(ninety_start, today).unwrap_or_default();
+                    cached_30_days = db.apps_range(thirty_start, today).unwrap_or_default();
+                    cached_all = db.apps_all().unwrap_or_default();
+                    cached_daily_year = db.daily(365).unwrap_or_default();
+                    cached_daily_all = db.daily_all().unwrap_or_default();
+                }
+
+                let apps = db.apps_today().unwrap_or_default();
+                let daily = db.daily(30).unwrap_or_default();
+                let snapshot = Snapshot {
+                    current_app: app,
+                    current_window: title,
+                    today: db.range_total(today, today).unwrap_or(0),
+                    yesterday: db.range_total(yesterday, yesterday).unwrap_or(0),
+                    week: db.range_total(week_start, today).unwrap_or(0),
+                    month: db.range_total(month_start, today).unwrap_or(0),
+                    apps,
+                    apps_week: cached_week.clone(),
+                    apps_month: cached_month.clone(),
+                    apps_half_year: cached_half_year.clone(),
+                    apps_year: cached_year.clone(),
+                    apps_90_days: cached_90_days.clone(),
+                    apps_30_days: cached_30_days.clone(),
+                    apps_all: cached_all.clone(),
+                    daily,
+                    daily_year: cached_daily_year.clone(),
+                    daily_all: cached_daily_all.clone(),
+                    locked,
+                    monitor_on: monitor_on(locked, idle),
+                    active_now: active,
+                    idle_seconds: idle,
+                    cpu: sys.global_cpu_usage(),
+                    memory_mb: sys.used_memory() / 1024 / 1024,
                 };
-                write_snapshot(&s);
+
+                if let Ok(mut current) = snap.lock() {
+                    *current = snapshot;
+                    write_snapshot(&current);
+                }
             }
         });
     }
@@ -317,7 +473,12 @@ fn main()->Result<()> {
             apps_month:db.apps_range(month_start,today).unwrap_or_default(),
             apps_half_year:db.apps_range(six_months_ago,today).unwrap_or_default(),
             apps_year:db.apps_range(year_ago,today).unwrap_or_default(),
-            daily:db.daily(14).unwrap_or_default(),
+            apps_90_days:db.apps_range(today-ChronoDuration::days(89),today).unwrap_or_default(),
+            apps_30_days:db.apps_range(today-ChronoDuration::days(29),today).unwrap_or_default(),
+            apps_all:db.apps_all().unwrap_or_default(),
+            daily:db.daily(30).unwrap_or_default(),
+            daily_year:db.daily(365).unwrap_or_default(),
+            daily_all:db.daily_all().unwrap_or_default(),
             ..Snapshot::default()
         };
         if let Ok(mut current)=snap.lock() {
@@ -326,10 +487,12 @@ fn main()->Result<()> {
         }
     }
 
-    let background=std::env::args().any(|a|a=="--background" || a=="--collector");
-    if background {
-        Collector::start(db.clone(),snap.clone());
-    }
+    let background = std::env::args().any(|a| a == "--background");
+
+    // The Rust process owns both the collector and the tray. This keeps the
+    // lifecycle single-owner: a normal launch starts the collector and UI,
+    // while --background starts only the collector/tray for Windows startup.
+    Collector::start(db.clone(), snap.clone());
 
     let menu=Menu::new();
     let show=MenuItem::new("打开 ScreenTime RS",true,None);
