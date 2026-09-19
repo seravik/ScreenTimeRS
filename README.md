@@ -1,27 +1,29 @@
-# ScreenTime RS v0.7.4
+# ScreenTime RS v0.8.0
 
 ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
 
-## v0.7.4
+## v0.8.0
 
-- Fixed the pressed-state appearance of buttons so standard buttons no longer switch to the application accent color while pressed.
-- Added **Traditional Chinese** and renamed the original Chinese option to **Simplified Chinese**.
-- Added local usage-data **export and import** using JSON backups.
-- Supported interface languages: Follow system, Simplified Chinese, Traditional Chinese, and English.
-- Added **Delete all data** with a generated confirmation code and an explicitly highlighted destructive action.
-- Removed the duplicated top page banner and consolidated the main controls into the custom title bar.
-- Simplified navigation-pane resizing with an invisible edge hit area and the standard horizontal-resize cursor.
-- Improved language coverage across navigation, settings, statistics, usage periods, and color-picker related UI.
+- View application usage for any selected historical date.
+- Open application details with usage totals, period share, and recorded daily history.
+- Added application usage percentages to Statistics.
+- Improved application name recognition for common Windows and third-party applications.
+- Improved Windows lock/session-state detection and screen-time accounting accuracy.
+- Split the live runtime snapshot from slower historical analytics to reduce refresh overhead as history grows.
+- Safer data import with validation and an automatic local SQLite backup before replacement.
+- Simplified the Settings page by collapsing infrequently used sections.
 
 ## Core features
 
 - Today, yesterday, this week, and this month overview statistics.
-- Application usage ranges: Today, This week, This month, Last 6 months, Last year, and All time.
+- Application usage ranges: Today, This week, This month, Last 6 months, Last year, All time, and Selected day.
 - Statistics ranges: Last 30 days, Last 90 days, Last 6 months, Last year, and All time.
-- Daily usage charts and application rankings.
-- Windows idle and lock-state awareness to improve usage-time accuracy.
+- Daily usage charts, application rankings, and usage-share percentages.
+- Historical daily application usage that can be queried back to the oldest recorded data.
+- Application detail views with recorded daily history.
+- Windows idle and lock/session-state awareness.
 - CPU and memory monitoring.
-- Local SQLite storage with JSON backup and restore.
+- Local SQLite storage with JSON export/import and automatic pre-import backup.
 - Windows system-tray support and optional background startup.
 - Light, dark, system, and custom accent-color themes.
 
@@ -30,14 +32,16 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 ```text
 WinUI 3 / Fluent UI
         │
-        │ snapshot.json
+        ├── snapshot.json   ← lightweight live state, refreshed every second
+        └── analytics.json  ← cached historical ranges, refreshed periodically
+        │
         ▼
 Rust monitoring core
         │
         ├── Foreground application detection
-        ├── Keyboard / mouse idle and lock-state detection
+        ├── Keyboard / mouse idle and Windows lock/session-state detection
         ├── CPU / memory metrics
-        ├── Local SQLite database
+        ├── Local SQLite historical database
         └── System tray
 ```
 
@@ -71,14 +75,14 @@ dist\ui\screentime-rs.exe
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.7.4-Setup.exe
+installer-output\ScreenTimeRS-v0.8.0-Setup.exe
 ```
 
 ## Usage-data backup
 
 Export and import are available from **Settings → Data management**.
 
-The backup format is JSON and contains the locally recorded application-usage history. Importing replaces the current usage history with the selected backup. Settings are not included in the backup.
+The backup format is JSON and contains the locally recorded application-usage history. Importing validates the data and automatically creates a local SQLite backup before replacing the current usage history. Settings are not included in the backup.
 
 The delete-all-data action removes the recorded usage history. It does not remove application settings or uninstall the program.
 
@@ -90,10 +94,22 @@ SQLite database:
 %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\screentime.db
 ```
 
-Runtime snapshot:
+Live runtime snapshot:
 
 ```text
 %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\snapshot.json
+```
+
+Historical analytics cache:
+
+```text
+%LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\analytics.json
+```
+
+Automatic import backups:
+
+```text
+%LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data\backups\
 ```
 
 ScreenTime RS does not actively upload usage statistics to a remote server.
@@ -104,4 +120,4 @@ See [LICENSE](LICENSE).
 
 ## Version
 
-**v0.7.4**
+**v0.8.0**

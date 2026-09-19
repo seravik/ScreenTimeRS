@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -25,22 +26,10 @@ public enum ThemeMode
     Dark = 2
 }
 
-public sealed class NavigationResizeHandle : Grid
-{
-
-    public NavigationResizeHandle()
-    {
-    }
-
-    public void SetResizeCursor()
-    {
-        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
-    }
-}
-
 public sealed partial class MainWindow : Window
 {
     private readonly string _snapshotPath;
+    private readonly string _analyticsPath;
     private readonly string _shutdownPath;
     private Process? _collector;
     private ThemeMode _themeMode;
@@ -77,6 +66,7 @@ public sealed partial class MainWindow : Window
             "ScreenTimeRS", "ScreenTime RS", "data");
 
         _snapshotPath = Path.Combine(dataDir, "snapshot.json");
+        _analyticsPath = Path.Combine(dataDir, "analytics.json");
         _shutdownPath = Path.Combine(dataDir, "shutdown.flag");
 
         SetWindowIdentity();
@@ -113,8 +103,8 @@ public sealed partial class MainWindow : Window
         ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
-        _appsPage = new AppsPage();
-        _statsPage = new StatsPage();
+        _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
+        _statsPage = new StatsPage(LoadStatsPeriodAsync);
         _settingsPage = new SettingsPage(_themeMode, _languageMode, accent);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
         _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
@@ -122,6 +112,9 @@ public sealed partial class MainWindow : Window
         _settingsPage.ExportDataRequested += SettingsPage_ExportDataRequested;
         _settingsPage.ImportDataRequested += SettingsPage_ImportDataRequested;
         _settingsPage.DeleteAllDataRequested += SettingsPage_DeleteAllDataRequested;
+        _settingsPage.PauseRequested += SettingsPage_PauseRequested;
+        _settingsPage.BackupRequested += SettingsPage_BackupRequested;
+        _settingsPage.DiagnosticsRequested += SettingsPage_DiagnosticsRequested;
         ApplyAccent(accent);
 
         ApplyLanguage(_languageMode);
@@ -261,6 +254,46 @@ public sealed partial class MainWindow : Window
             });
         }
         catch { }
+    }
+
+    private void SettingsPage_PauseRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var pausePath = _shutdownPath.Replace("shutdown.flag", "pause.flag");
+            if (File.Exists(pausePath)) File.Delete(pausePath); else File.WriteAllText(pausePath, "paused");
+            File.WriteAllText(Path.Combine(Path.GetDirectoryName(pausePath)!, "refresh.flag"), "refresh");
+        }
+        catch { }
+    }
+
+    private async void SettingsPage_BackupRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
+            var psi = new ProcessStartInfo(exe, "--backup") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+            using var process = Process.Start(psi);
+            var path = process == null ? "" : await process.StandardOutput.ReadToEndAsync();
+            if (process != null) await process.WaitForExitAsync();
+            var en = UiLanguage == LanguageMode.English; var hant = UiLanguage == LanguageMode.TraditionalChinese;
+            var dialog = new ContentDialog { Title = en ? "Backup created" : hant ? "備份已建立" : "备份已创建", Content = path.Trim(), CloseButtonText = en ? "OK" : hant ? "確定" : "确定", XamlRoot = ContentFrame.XamlRoot };
+            await dialog.ShowAsync();
+        } catch { }
+    }
+
+    private async void SettingsPage_DiagnosticsRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
+            var psi = new ProcessStartInfo(exe, "--diagnostics") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+            using var process = Process.Start(psi); var text = process == null ? "" : await process.StandardOutput.ReadToEndAsync();
+            if (process != null) await process.WaitForExitAsync();
+            var en = UiLanguage == LanguageMode.English; var hant = UiLanguage == LanguageMode.TraditionalChinese;
+            var dialog = new ContentDialog { Title = en ? "Diagnostics" : hant ? "診斷信息" : "诊断信息", Content = new ScrollViewer { MaxHeight = 420, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } }, CloseButtonText = en ? "Close" : hant ? "關閉" : "关闭", XamlRoot = ContentFrame.XamlRoot };
+            await dialog.ShowAsync();
+        } catch { }
     }
 
     private void SettingsPage_AccentColorChanged(object? sender, Color color)
@@ -499,10 +532,10 @@ public sealed partial class MainWindow : Window
         var en = uiLanguage == LanguageMode.English;
         var hant = uiLanguage == LanguageMode.TraditionalChinese;
         var fullText = en
-            ? "TERMS OF USE\n\nVersion: v0.7.4\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.7.4\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
+            ? "TERMS OF USE\n\nVersion: v0.8.0\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.8.0\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
             : hant
-                ? "使用條款\n\n版本：v0.7.4\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.7.4\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
-                : "使用条款\n\n版本：v0.7.4\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.7.4\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+                ? "使用條款\n\n版本：v0.8.0\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.8.0\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
+                : "使用条款\n\n版本：v0.8.0\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.8.0\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
 
         var content = new ScrollViewer
         {
@@ -600,7 +633,24 @@ public sealed partial class MainWindow : Window
         try
         {
             if (!File.Exists(_snapshotPath)) return null;
-            return JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(_snapshotPath));
+
+            var snapshot = JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(_snapshotPath)) ?? new Snapshot();
+            if (File.Exists(_analyticsPath))
+            {
+                var analytics = JsonSerializer.Deserialize<AnalyticsSnapshot>(File.ReadAllText(_analyticsPath));
+                if (analytics is not null)
+                {
+                    snapshot.apps_week = analytics.apps_week;
+                    snapshot.apps_month = analytics.apps_month;
+                    snapshot.apps_half_year = analytics.apps_half_year;
+                    snapshot.apps_year = analytics.apps_year;
+                    snapshot.apps_90_days = analytics.apps_90_days;
+                    snapshot.apps_30_days = analytics.apps_30_days;
+                    snapshot.daily = analytics.daily;
+                    snapshot.daily_year = analytics.daily_year;
+                }
+            }
+            return snapshot;
         }
         catch { return null; }
     }
@@ -622,6 +672,7 @@ public sealed partial class MainWindow : Window
     private void UpdatePages(Snapshot s)
     {
         _latestSnapshot = s;
+        _settingsPage.SetMonitoringState(s.paused);
         UpdateVisiblePage();
     }
 
@@ -918,13 +969,19 @@ public sealed partial class MainWindow : Window
         return style;
     }
 
+    private string CollectorExecutablePath()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
+        if (!File.Exists(exe))
+            exe = Path.Combine(AppContext.BaseDirectory, "..", "screentime-rs.exe");
+        return exe;
+    }
+
     private async Task<bool> RunCollectorCommandAsync(string command, string argument)
     {
         try
         {
-            var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
-            if (!File.Exists(exe))
-                exe = Path.Combine(AppContext.BaseDirectory, "..", "screentime-rs.exe");
+            var exe = CollectorExecutablePath();
             if (!File.Exists(exe)) return false;
 
             var psi = new ProcessStartInfo(exe)
@@ -943,6 +1000,187 @@ public sealed partial class MainWindow : Window
         catch { return false; }
     }
 
+    private async Task<string?> RunCollectorQueryAsync(params string[] arguments)
+    {
+        try
+        {
+            var exe = CollectorExecutablePath();
+            if (!File.Exists(exe)) return null;
+
+            var psi = new ProcessStartInfo(exe)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = AppContext.BaseDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            foreach (var argument in arguments)
+                psi.ArgumentList.Add(argument);
+
+            using var process = Process.Start(psi);
+            if (process is null) return null;
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(outputTask, errorTask);
+            await process.WaitForExitAsync();
+            return process.ExitCode == 0 ? await outputTask : null;
+        }
+        catch { return null; }
+    }
+
+    private async Task LoadDayUsageAsync(DateTime date)
+    {
+        var text = await RunCollectorQueryAsync("--query-day", date.ToString("yyyy-MM-dd"));
+        if (text is null) return;
+        try
+        {
+            var data = JsonSerializer.Deserialize<DayUsageResponse>(text);
+            if (data is not null)
+                _appsPage.SetSelectedDay(data);
+        }
+        catch { }
+    }
+
+    private async Task LoadAppsAllTimeAsync()
+    {
+        var text = await RunCollectorQueryAsync("--query-all");
+        if (text is null) return;
+        try
+        {
+            var data = JsonSerializer.Deserialize<RangeUsageResponse>(text);
+            if (data is not null)
+                _appsPage.SetAllTimeData(data);
+        }
+        catch { }
+    }
+
+    private async Task LoadStatsPeriodAsync(int periodIndex)
+    {
+        if (periodIndex != 4)
+        {
+            _statsPage.SetAllTimeData(null);
+            return;
+        }
+
+        var text = await RunCollectorQueryAsync("--query-all");
+        if (text is null) return;
+        try
+        {
+            var data = JsonSerializer.Deserialize<RangeUsageResponse>(text);
+            if (data is not null)
+                _statsPage.SetAllTimeData(data);
+        }
+        catch { }
+    }
+
+    private async Task ShowAppDetailsAsync(AppStat app)
+    {
+        var index = _appsPage.SelectedPeriodIndex;
+        var args = new List<string> { "--query-app", app.name };
+        if (index == 6 && _appsPage.SelectedDay is DateTime selectedDay)
+        {
+            var date = selectedDay.ToString("yyyy-MM-dd");
+            args.Add(date);
+            args.Add(date);
+        }
+        else if (index != 5)
+        {
+            var today = DateTime.Today;
+            var start = index switch
+            {
+                1 => today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1)),
+                2 => new DateTime(today.Year, today.Month, 1),
+                3 => today.AddMonths(-6),
+                4 => today.AddMonths(-12),
+                _ => today
+            };
+            args.Add(start.ToString("yyyy-MM-dd"));
+            args.Add(today.ToString("yyyy-MM-dd"));
+        }
+
+        var text = await RunCollectorQueryAsync(args.ToArray());
+        if (text is null) return;
+        AppHistoryResponse? history = null;
+        try { history = JsonSerializer.Deserialize<AppHistoryResponse>(text); } catch { }
+        if (history is null) return;
+
+        var total = history.daily.Sum(x => Math.Max(0, x.seconds));
+        if (index == 6 && _appsPage.SelectedDayTotal is long selectedTotal)
+            total = selectedTotal;
+        else if (index == 5 && _appsPage.AllTimeAppsTotal is long allTimeTotal)
+            total = allTimeTotal;
+
+        var dayRows = history.daily
+            .Where(x => x.seconds > 0)
+            .ToArray();
+        var list = new StackPanel { Spacing = 6 };
+        foreach (var day in dayRows)
+        {
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            row.Children.Add(new TextBlock { Text = FormatHistoryDate(day.label, UiLanguage), VerticalAlignment = VerticalAlignment.Center });
+            var value = new TextBlock
+            {
+                Text = UiHelpers.Format(day.seconds, UiLanguage),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(value, 1);
+            row.Children.Add(value);
+            list.Children.Add(row);
+        }
+        if (dayRows.Length == 0)
+            list.Children.Add(new TextBlock { Text = UiLanguage == LanguageMode.English ? "No usage recorded." : UiLanguage == LanguageMode.TraditionalChinese ? "暫無使用記錄。" : "暂无使用记录。" });
+
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
+        header.ColumnDefinitions.Add(new ColumnDefinition());
+        var icon = new Microsoft.UI.Xaml.Controls.Image { Width = 42, Height = 42, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform };
+        UiHelpers.SetAppIcon(icon, app);
+        header.Children.Add(icon);
+        var details = new StackPanel { Spacing = 2 };
+        details.Children.Add(new TextBlock { Text = UiHelpers.FriendlyName(app, UiLanguage), FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        var share = total > 0 ? history.total_seconds * 100.0 / total : 0;
+        details.Children.Add(new TextBlock { Text = UiLanguage == LanguageMode.English
+            ? $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  {share:F1}% of period"
+            : UiLanguage == LanguageMode.TraditionalChinese
+                ? $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  佔期間 {share:F1}%"
+                : $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  占期间 {share:F1}%", Opacity = .68 });
+        Grid.SetColumn(details, 1);
+        header.Children.Add(details);
+
+        var content = new StackPanel { Spacing = 16 };
+        content.Children.Add(header);
+        content.Children.Add(new TextBlock
+        {
+            Text = UiLanguage == LanguageMode.English ? "Daily history" : UiLanguage == LanguageMode.TraditionalChinese ? "每日使用歷史" : "每日使用历史",
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        content.Children.Add(new ScrollViewer { Content = list, MaxHeight = 360, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+
+        var dialog = new ContentDialog
+        {
+            RequestedTheme = RootGrid.ActualTheme,
+            Title = UiHelpers.FriendlyName(app, UiLanguage),
+            Content = content,
+            CloseButtonText = UiText.Close(UiLanguage),
+            XamlRoot = ContentFrame.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static string FormatHistoryDate(string raw, LanguageMode language)
+    {
+        if (DateTime.TryParseExact(raw, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var day))
+        {
+            return language == LanguageMode.English ? day.ToString("MMM d, yyyy") : language == LanguageMode.TraditionalChinese ? day.ToString("yyyy年M月d日") : day.ToString("yyyy年M月d日");
+        }
+        return raw;
+    }
+
     private async Task RefreshAfterDataChangeAsync()
     {
         for (int i = 0; i < 6; i++)
@@ -950,6 +1188,14 @@ public sealed partial class MainWindow : Window
             await Task.Delay(300);
             UpdatePages(LoadSnapshot() ?? new Snapshot());
         }
+
+        if (_appsPage.SelectedPeriodIndex == 5)
+            await LoadAppsAllTimeAsync();
+        else if (_appsPage.SelectedPeriodIndex == 6 && _appsPage.SelectedDay is DateTime selectedDay)
+            await LoadDayUsageAsync(selectedDay);
+
+        if (_statsPage.AllTimeTotal is not null)
+            await LoadStatsPeriodAsync(4);
     }
 
     private async Task ShowDataOperationResultAsync(bool success, string successText, string failedText)
@@ -1006,6 +1252,46 @@ public sealed class Snapshot
     public ulong idle_seconds { get; set; }
     public float cpu { get; set; }
     public ulong memory_mb { get; set; }
+    public long current_session_seconds { get; set; }
+    public long longest_session_today { get; set; }
+    public long unlocks_today { get; set; }
+    public bool paused { get; set; }
+    public JsonDaily[] hourly_today { get; set; } = Array.Empty<JsonDaily>();
+}
+
+public sealed class AnalyticsSnapshot
+{
+    public AppStat[] apps_week { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_month { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_half_year { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_year { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_90_days { get; set; } = Array.Empty<AppStat>();
+    public AppStat[] apps_30_days { get; set; } = Array.Empty<AppStat>();
+    public JsonDaily[] daily { get; set; } = Array.Empty<JsonDaily>();
+    public JsonDaily[] daily_year { get; set; } = Array.Empty<JsonDaily>();
+}
+
+public sealed class DayUsageResponse
+{
+    public string date { get; set; } = "";
+    public long total_seconds { get; set; }
+    public AppStat[] apps { get; set; } = Array.Empty<AppStat>();
+}
+
+public sealed class RangeUsageResponse
+{
+    public string start_date { get; set; } = "";
+    public string end_date { get; set; } = "";
+    public long total_seconds { get; set; }
+    public AppStat[] apps { get; set; } = Array.Empty<AppStat>();
+    public JsonDaily[] daily { get; set; } = Array.Empty<JsonDaily>();
+}
+
+public sealed class AppHistoryResponse
+{
+    public string app { get; set; } = "";
+    public long total_seconds { get; set; }
+    public JsonDaily[] daily { get; set; } = Array.Empty<JsonDaily>();
 }
 
 public sealed class AppStat
@@ -1096,7 +1382,27 @@ public static class UiHelpers
             "chrome" => "Google Chrome",
             "msedge" => "Microsoft Edge",
             "code" => "Visual Studio Code",
+            "cursor" => "Cursor",
+            "devenv" => "Microsoft Visual Studio",
             "discord" => "Discord",
+            "slack" => "Slack",
+            "telegram" => "Telegram",
+            "steam" => "Steam",
+            "steamwebhelper" => "Steam",
+            "msteams" => "Microsoft Teams",
+            "ms-teams" => "Microsoft Teams",
+            "teams" => "Microsoft Teams",
+            "winword" => "Microsoft Word",
+            "excel" => "Microsoft Excel",
+            "powerpnt" => "Microsoft PowerPoint",
+            "outlook" => "Microsoft Outlook",
+            "notepad" => "Notepad",
+            "mspaint" => "Paint",
+            "windowsterminal" => "Windows Terminal",
+            "wt" => "Windows Terminal",
+            "taskmgr" => "Task Manager",
+            "snippingtool" => "Snipping Tool",
+            "wezterm" => "WezTerm",
             _ => null
         };
 

@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Globalization;
+using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.Win32;
 using System.Security.Cryptography;
@@ -88,6 +90,21 @@ internal static class UiText
     };
 }
 
+internal static class AppCategoryResolver
+{
+    public static string Get(string app, LanguageMode language)
+    {
+        var n = (app ?? "").ToLowerInvariant();
+        var key = n.Contains("chrome") || n.Contains("firefox") || n.Contains("edge") || n.Contains("opera") || n.Contains("brave") ? 0
+            : n.Contains("code") || n.Contains("studio") || n.Contains("devenv") || n.Contains("idea") || n.Contains("rider") || n.Contains("terminal") || n.Contains("powershell") ? 1
+            : n.Contains("steam") || n.Contains("epic") || n.Contains("game") || n.Contains("discord") ? 2
+            : n.Contains("word") || n.Contains("excel") || n.Contains("powerpnt") || n.Contains("outlook") ? 3 : 4;
+        if (language == LanguageMode.English) return key switch { 0 => "Browser", 1 => "Development", 2 => "Entertainment", 3 => "Productivity", _ => "System / Other" };
+        if (language == LanguageMode.TraditionalChinese) return key switch { 0 => "瀏覽器", 1 => "開發", 2 => "娛樂", 3 => "生產力", _ => "系統 / 其他" };
+        return key switch { 0 => "浏览器", 1 => "开发", 2 => "娱乐", 3 => "生产力", _ => "系统 / 其他" };
+    }
+}
+
 internal static class DataConfirmationCode
 {
     const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -110,10 +127,16 @@ public sealed class OverviewPage : Page
     readonly TextBlock pageTitle;
     readonly TextBlock trendTitle;
     readonly TextBlock trendSummary;
+    readonly TextBlock sessionValue, longestValue, unlockValue, hourlyTitle, hourlyHint;
+    readonly TextBlock[] metricTitles = new TextBlock[3];
+    readonly Border[] hourlyBars = new Border[24];
     readonly Border[] trendBars = new Border[30];
     readonly TextBlock[] trendLabels = new TextBlock[30];
+    readonly Border hourlyHoverCard;
+    readonly TextBlock hourlyHoverText;
     readonly Border trendHoverCard;
     readonly TextBlock trendHoverText;
+    int _hoveredHourlyIndex = -1;
     int _hoveredTrendIndex = -1;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
@@ -132,6 +155,73 @@ public sealed class OverviewPage : Page
         AddCard(cards, 2, out values[2], out cardTitles[2], out cardSubs[2]);
         AddCard(cards, 3, out values[3], out cardTitles[3], out cardSubs[3]);
         panel.Children.Add(cards);
+
+        var metrics = new Grid { ColumnSpacing = 14 };
+        for (int i = 0; i < 3; i++) metrics.ColumnDefinitions.Add(new ColumnDefinition());
+        AddMetricCard(metrics, 0, out sessionValue, out metricTitles[0], "当前连续使用");
+        AddMetricCard(metrics, 1, out longestValue, out metricTitles[1], "今日最长连续使用");
+        AddMetricCard(metrics, 2, out unlockValue, out metricTitles[2], "今日解锁次数");
+        panel.Children.Add(metrics);
+
+        var hourlyBorder = new Border { Padding = new Thickness(20), CornerRadius = new CornerRadius(12), BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray), BorderThickness = new Thickness(1) };
+        var hourlyPanel = new StackPanel { Spacing = 10 };
+        hourlyTitle = new TextBlock { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        hourlyPanel.Children.Add(hourlyTitle);
+        hourlyHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+        hourlyPanel.Children.Add(hourlyHint);
+        var hourlyScroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        var hourlyHost = new Grid { Height = 150, MinWidth = 960 };
+        var hourlyGrid = new Grid { Height = 150, MinWidth = 960, ColumnSpacing = 6 };
+        for (int i = 0; i < 24; i++) {
+            hourlyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+            var bar = new Border { Width = 18, Height = 4, CornerRadius = new CornerRadius(5), Background = UiHelpers.AccentBrush(), VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center };
+            var col = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Stretch };
+            var area = new Grid { Height = 115, VerticalAlignment = VerticalAlignment.Bottom };
+            area.Children.Add(bar);
+            col.Children.Add(area);
+            var label = new TextBlock { Text = i.ToString("00"), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Opacity = .65 };
+            col.Children.Add(label);
+
+            int hourIndex = i;
+            col.PointerEntered += (_, _) => ShowHourlyHover(hourIndex);
+            col.PointerMoved += (_, _) => ShowHourlyHover(hourIndex);
+            col.PointerExited += (_, _) => HideHourlyHover(hourIndex);
+
+            Grid.SetColumn(col, i);
+            hourlyGrid.Children.Add(col);
+            hourlyBars[i] = bar;
+        }
+        hourlyHost.Children.Add(hourlyGrid);
+
+        hourlyHoverText = new TextBlock
+        {
+            FontSize = 12,
+            TextWrapping = TextWrapping.NoWrap
+        };
+        hourlyHoverCard = new Border
+        {
+            Child = hourlyHoverText,
+            Padding = new Thickness(10, 7, 10, 7),
+            CornerRadius = new CornerRadius(7),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+            BorderThickness = new Thickness(1),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false
+        };
+        var hourlyHoverCanvas = new Canvas
+        {
+            Height = 150,
+            MinWidth = 960,
+            IsHitTestVisible = false
+        };
+        hourlyHoverCanvas.Children.Add(hourlyHoverCard);
+        hourlyHost.Children.Add(hourlyHoverCanvas);
+
+        hourlyScroll.Content = hourlyHost;
+        hourlyPanel.Children.Add(hourlyScroll);
+        hourlyBorder.Child = hourlyPanel;
+        panel.Children.Add(hourlyBorder);
 
         status = new InfoBar { IsOpen = true, IsClosable = true };
         status.Closed += (_, _) => statusClosed = true;
@@ -234,10 +324,36 @@ public sealed class OverviewPage : Page
         Content = new ScrollViewer { Content = panel };
     }
 
+    static void AddMetricCard(Grid grid, int column, out TextBlock value, out TextBlock titleBlock, string title)
+    {
+        var border = new Border { Padding = new Thickness(16), CornerRadius = new CornerRadius(10), BorderBrush = new SolidColorBrush(UIColor.FromArgb(45,128,128,128)), BorderThickness = new Thickness(1) };
+        var stack = new StackPanel { Spacing = 5 };
+        value = new TextBlock
+        {
+            FontSize = 23,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        };
+        stack.Children.Add(value);
+        titleBlock = new TextBlock
+        {
+            Text = title,
+            FontSize = 12,
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap
+        };
+        stack.Children.Add(titleBlock);
+        border.Child = stack;
+        Grid.SetColumn(border, column);
+        grid.Children.Add(border);
+    }
+
     public void ApplyAccent(UIColor color)
     {
         var brush = new SolidColorBrush(color);
         foreach (var bar in trendBars)
+            bar.Background = brush;
+        foreach (var bar in hourlyBars)
             bar.Background = brush;
 
         // InfoBar uses dedicated severity theme resources rather than the
@@ -271,8 +387,15 @@ public sealed class OverviewPage : Page
         cardSubs[1].Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
         cardSubs[2].Text = en ? "Monday to today" : hant ? "週一至今天" : "周一至今天";
         cardSubs[3].Text = en ? "Accumulated this month" : hant ? "本月累計" : "本月累计";
+        metricTitles[0].Text = en ? "Current continuous use" : hant ? "目前連續使用" : "当前连续使用";
+        metricTitles[1].Text = en ? "Longest continuous use today" : hant ? "今日最長連續使用" : "今日最长连续使用";
+        metricTitles[2].Text = en ? "Unlocks today" : hant ? "今日解鎖次數" : "今日解锁次数";
         trendTitle.Text = en ? "Last 30 days" : hant ? "最近 30 天" : "最近 30 天";
+        hourlyTitle.Text = en ? "Today by hour" : hant ? "今天每小時" : "今日按小时";
+        hourlyHint.Text = "";
         UpdateSnapshot(_lastSnapshot ?? new Snapshot());
+        if (_hoveredHourlyIndex >= 0)
+            ShowHourlyHover(_hoveredHourlyIndex);
     }
     public void UpdateSnapshot(Snapshot s)
     {
@@ -281,10 +404,42 @@ public sealed class OverviewPage : Page
         values[1].Text = UiHelpers.Format(s.yesterday, _language);
         values[2].Text = UiHelpers.Format(s.week, _language);
         values[3].Text = UiHelpers.Format(s.month, _language);
+        sessionValue.Text = UiHelpers.Format(s.current_session_seconds, _language);
+        longestValue.Text = UiHelpers.Format(s.longest_session_today, _language);
+        unlockValue.Text = s.unlocks_today.ToString();
+        var hourlyMax = Math.Max(1, s.hourly_today.Select(x => Math.Max(0, x.seconds)).DefaultIfEmpty(0).Max());
+        var hourlyRecordedTotal = s.hourly_today.Sum(x => Math.Max(0, x.seconds));
+        for (int i = 0; i < hourlyBars.Length; i++) {
+            var seconds = i < s.hourly_today.Length ? Math.Max(0, s.hourly_today[i].seconds) : 0;
+            hourlyBars[i].Height = seconds <= 0 ? 0 : Math.Max(6, 105 * seconds / (double)hourlyMax);
+        }
+        var dayTotalForHint = Math.Max(0, s.today);
+        var missingHourly = Math.Max(0, dayTotalForHint - hourlyRecordedTotal);
+        if (missingHourly > 0)
+        {
+            var recordedText = UiHelpers.Format(hourlyRecordedTotal, _language);
+            var totalText = UiHelpers.Format(dayTotalForHint, _language);
+            var missingText = UiHelpers.Format(missingHourly, _language);
+            hourlyHint.Text = _language == LanguageMode.English
+                ? $"Hourly recorded {recordedText} / today's total {totalText}. {missingText} of today's total cannot be assigned to an exact hour because it comes from older daily aggregate records."
+                : _language == LanguageMode.TraditionalChinese
+                    ? $"每小時已記錄 {recordedText}／今日總計 {totalText}。其中 {missingText} 來自較早的每日彙總資料，無法準確分配到具體小時。"
+                    : $"按小时已记录 {recordedText}／今日总计 {totalText}。其中 {missingText} 来自较早的每日汇总数据，无法准确分配到具体小时。";
+        }
+        else
+        {
+            hourlyHint.Text = _language == LanguageMode.English ? "All of today's recorded usage is represented in the hourly chart." : _language == LanguageMode.TraditionalChinese ? "今日已記錄的使用時間均已顯示在每小時圖表中。" : "今天已记录的使用时间均已显示在按小时图表中。";
+        }
 
         var name = string.IsNullOrWhiteSpace(s.current_app) ? "—" :
             UiHelpers.FriendlyName(new AppStat { name = s.current_app }, _language);
-        if (s.locked)
+        if (s.paused)
+        {
+            status.Severity = InfoBarSeverity.Warning;
+            status.Title = _language == LanguageMode.English ? "Recording paused" : _language == LanguageMode.TraditionalChinese ? "已暫停記錄" : "已暂停记录";
+            status.Message = _language == LanguageMode.English ? "Usage tracking is paused from Advanced settings." : _language == LanguageMode.TraditionalChinese ? "使用時間記錄已在進階設定中暫停。" : "使用时间记录已在高级设置中暂停。";
+        }
+        else if (s.locked)
         {
             status.Severity = InfoBarSeverity.Warning;
             status.Title = _language == LanguageMode.English ? "Currently locked" : _language == LanguageMode.TraditionalChinese ? "目前已鎖定" : "当前已锁定";
@@ -343,6 +498,55 @@ public sealed class OverviewPage : Page
         // Re-apply the in-page overlay after each refresh so a visible popup never blinks away.
         if (_hoveredTrendIndex >= 0)
             ShowTrendHover(_hoveredTrendIndex);
+    }
+
+    void ShowHourlyHover(int index)
+    {
+        if (_lastSnapshot is null || index < 0 || index >= 24) return;
+
+        _hoveredHourlyIndex = index;
+        var hours = _lastSnapshot.hourly_today ?? Array.Empty<JsonDaily>();
+        var seconds = index < hours.Length ? Math.Max(0, hours[index].seconds) : 0;
+        var dayTotal = Math.Max(0, _lastSnapshot.today);
+        var percent = dayTotal > 0 ? seconds * 100.0 / dayTotal : 0.0;
+
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        var start = index.ToString("00");
+        var end = ((index + 1) % 24).ToString("00");
+        var duration = UiHelpers.Format(seconds, _language);
+
+        hourlyHoverText.Text = en
+            ? $"{start}:00–{end}:00\nUsage: {duration}\nToday: {percent:F1}%"
+            : hant
+                ? $"{start}:00–{end}:00\n使用時間：{duration}\n今日佔比：{percent:F1}%"
+                : $"{start}:00–{end}:00\n使用时间：{duration}\n今日占比：{percent:F1}%";
+
+        var dark = ActualTheme == ElementTheme.Dark;
+        hourlyHoverCard.Background = new SolidColorBrush(
+            dark ? UIColor.FromArgb(244, 45, 45, 45) : UIColor.FromArgb(248, 255, 255, 255));
+        hourlyHoverCard.BorderBrush = new SolidColorBrush(
+            dark ? UIColor.FromArgb(95, 255, 255, 255) : UIColor.FromArgb(80, 120, 120, 120));
+        hourlyHoverText.Foreground = new SolidColorBrush(
+            dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
+
+        hourlyHoverCard.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var popupWidth = hourlyHoverCard.DesiredSize.Width;
+        var step = 42.0;
+        var center = index * step + 18.0;
+        var left = Math.Clamp(center - popupWidth / 2.0, 4.0, 960.0 - popupWidth - 4.0);
+        Canvas.SetLeft(hourlyHoverCard, left);
+        Canvas.SetTop(hourlyHoverCard, 4);
+        hourlyHoverCard.Visibility = Visibility.Visible;
+    }
+
+    void HideHourlyHover(int index)
+    {
+        if (_hoveredHourlyIndex == index)
+        {
+            _hoveredHourlyIndex = -1;
+            hourlyHoverCard.Visibility = Visibility.Collapsed;
+        }
     }
 
     void ShowTrendHover(int index)
@@ -420,17 +624,32 @@ public sealed class AppsPage : Page
     readonly StackPanel list = new();
     readonly TextBox search = new();
     readonly ComboBox period = new();
+    readonly CalendarDatePicker datePicker = new();
+    readonly TextBlock daySummary = new();
+    readonly TextBlock emptyState = new();
     readonly TextBlock title = new();
     readonly Dictionary<string, AppRow> rows = new(StringComparer.OrdinalIgnoreCase);
+    readonly Func<DateTime, Task>? _loadDayUsageAsync;
+    readonly Func<AppStat, Task>? _showAppDetailsAsync;
+    readonly Func<Task>? _loadAllTimeAsync;
     Snapshot snapshot = new();
+    DayUsageResponse? _selectedDayData;
+    AppStat[] _allTimeApps = Array.Empty<AppStat>();
+    bool _allTimeLoaded;
+    bool _allTimeLoading;
+    bool _updatingPeriod;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     UIColor _accentColor = ThemeManager.DefaultAccent;
 
-    public AppsPage()
+    public AppsPage(
+        Func<DateTime, Task>? loadDayUsageAsync = null,
+        Func<AppStat, Task>? showAppDetailsAsync = null,
+        Func<Task>? loadAllTimeAsync = null)
     {
-        // Use a Grid with a star-sized content row so the ScrollViewer receives
-        // a finite viewport. A ScrollViewer inside a StackPanel can measure its
-        // content at infinity and therefore fail to become scrollable.
+        _loadDayUsageAsync = loadDayUsageAsync;
+        _showAppDetailsAsync = showAppDetailsAsync;
+        _loadAllTimeAsync = loadAllTimeAsync;
+
         var root = new Grid { Padding = new Thickness(28), RowSpacing = 16 };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -441,26 +660,60 @@ public sealed class AppsPage : Page
         Grid.SetRow(title, 0);
         root.Children.Add(title);
 
-        var filters = new Grid { ColumnSpacing = 10 };
-        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+        var filters = new Grid { ColumnSpacing = 10, RowSpacing = 6 };
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
         filters.ColumnDefinitions.Add(new ColumnDefinition());
+        filters.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        filters.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
         period.Items.Add("今天");
         period.Items.Add("本周");
         period.Items.Add("本月");
         period.Items.Add("近半年");
         period.Items.Add("近一年");
         period.Items.Add("全部时间");
+        period.Items.Add("指定日期");
         period.SelectedIndex = 0;
-        period.SelectionChanged += (_, _) => RenderList();
+        period.SelectionChanged += Period_SelectionChanged;
         ApplyComboBoxAccent(period, _accentColor);
         Grid.SetColumn(period, 0);
+        Grid.SetRow(period, 0);
         filters.Children.Add(period);
+
+        datePicker.Width = 220;
+        datePicker.MaxDate = DateTimeOffset.Now.Date;
+        datePicker.Date = DateTimeOffset.Now.Date;
+        datePicker.DateChanged += DatePicker_DateChanged;
+        Grid.SetColumn(datePicker, 1);
+        Grid.SetRow(datePicker, 0);
+        filters.Children.Add(datePicker);
+
         search.PlaceholderText = "搜索应用";
         search.TextChanged += (_, _) => RenderList();
         Grid.SetColumn(search, 1);
+        Grid.SetColumnSpan(search, 2);
+        Grid.SetRow(search, 0);
         filters.Children.Add(search);
-        Grid.SetRow(filters, 1);
+
+        daySummary.FontSize = 12;
+        daySummary.Opacity = .65;
+        daySummary.TextWrapping = TextWrapping.Wrap;
+        Grid.SetColumn(daySummary, 0);
+        Grid.SetColumnSpan(daySummary, 3);
+        Grid.SetRow(daySummary, 1);
+        filters.Children.Add(daySummary);
+
         root.Children.Add(filters);
+        Grid.SetRow(filters, 1);
+
+        emptyState.FontSize = 15;
+        emptyState.Opacity = .62;
+        emptyState.TextAlignment = TextAlignment.Center;
+        emptyState.VerticalAlignment = VerticalAlignment.Center;
+        emptyState.Visibility = Visibility.Collapsed;
+        Grid.SetRow(emptyState, 2);
+        root.Children.Add(emptyState);
 
         var scroll = new ScrollViewer
         {
@@ -472,6 +725,93 @@ public sealed class AppsPage : Page
         root.Children.Add(scroll);
 
         Content = root;
+        UpdateDatePickerState();
+        UpdateDaySummary();
+    }
+
+    public int SelectedPeriodIndex => period.SelectedIndex;
+    public DateTime? SelectedDay => datePicker.Date?.DateTime.Date;
+    public long? SelectedDayTotal => _selectedDayData?.total_seconds;
+    public long? AllTimeAppsTotal => period.SelectedIndex == 5 && _allTimeLoaded
+        ? _allTimeApps.Sum(x => Math.Max(0, x.seconds))
+        : null;
+
+    async void Period_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingPeriod || period.SelectedIndex < 0) return;
+        UpdateDatePickerState();
+        if (period.SelectedIndex == 5)
+        {
+            _selectedDayData = null;
+            _allTimeLoading = true;
+            RenderList();
+            try
+            {
+                if (_loadAllTimeAsync is not null)
+                    await _loadAllTimeAsync();
+            }
+            finally
+            {
+                _allTimeLoading = false;
+                RenderList();
+            }
+        }
+        else if (period.SelectedIndex == 6)
+        {
+            await LoadSelectedDayAsync();
+        }
+        else
+        {
+            _selectedDayData = null;
+        }
+        UpdateDaySummary();
+        RenderList();
+    }
+
+    async void DatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
+    {
+        if (_updatingPeriod || !args.NewDate.HasValue) return;
+        _updatingPeriod = true;
+        period.SelectedIndex = 6;
+        _updatingPeriod = false;
+        _selectedDayData = null;
+        await LoadSelectedDayAsync();
+        UpdateDatePickerState();
+        UpdateDaySummary();
+        RenderList();
+    }
+
+    async Task LoadSelectedDayAsync()
+    {
+        var selected = datePicker.Date?.DateTime.Date;
+        if (!selected.HasValue)
+        {
+            _selectedDayData = null;
+            return;
+        }
+        if (_loadDayUsageAsync is not null)
+            await _loadDayUsageAsync(selected.Value);
+    }
+
+    public void SetSelectedDay(DayUsageResponse data)
+    {
+        if (!DateTime.TryParseExact(data.date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) return;
+        if (datePicker.Date?.DateTime.Date != parsed.Date) return;
+        _selectedDayData = data;
+        if (period.SelectedIndex == 6)
+        {
+            UpdateDaySummary();
+            RenderList();
+        }
+    }
+
+    public void SetAllTimeData(RangeUsageResponse data)
+    {
+        _allTimeApps = data?.apps ?? Array.Empty<AppStat>();
+        _allTimeLoaded = true;
+        snapshot.apps_all = _allTimeApps;
+        if (period.SelectedIndex == 5)
+            RenderList();
     }
 
     public void ApplyLanguage(LanguageMode language)
@@ -481,17 +821,22 @@ public sealed class AppsPage : Page
         var hant = language == LanguageMode.TraditionalChinese;
         title.Text = en ? "App usage" : hant ? "應用程式使用時間" : "应用使用时间";
         search.PlaceholderText = en ? "Search apps" : hant ? "搜尋應用程式" : "搜索应用";
-        var index = period.SelectedIndex;
+        var index = Math.Clamp(period.SelectedIndex < 0 ? 0 : period.SelectedIndex, 0, 6);
+        _updatingPeriod = true;
         period.Items.Clear();
         var items = en
-            ? new[] { "Today", "This week", "This month", "Last 6 months", "Last year", "All time" }
+            ? new[] { "Today", "This week", "This month", "Last 6 months", "Last year", "All time", "Selected day" }
             : hant
-                ? new[] { "今天", "本週", "本月", "近半年", "近一年", "全部時間" }
-                : new[] { "今天", "本周", "本月", "近半年", "近一年", "全部时间" };
+                ? new[] { "今天", "本週", "本月", "近半年", "近一年", "全部時間", "指定日期" }
+                : new[] { "今天", "本周", "本月", "近半年", "近一年", "全部时间", "指定日期" };
         foreach (var item in items) period.Items.Add(item);
-        period.SelectedIndex = Math.Clamp(index, 0, items.Length - 1);
+        period.SelectedIndex = index;
+        _updatingPeriod = false;
+        UpdateDatePickerState();
+        UpdateDaySummary();
         RenderList();
     }
+
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
@@ -500,42 +845,142 @@ public sealed class AppsPage : Page
             row.ApplyAccent(color);
     }
 
-    public void UpdateSnapshot(Snapshot s) { snapshot = s; RenderList(); }
+    public void UpdateSnapshot(Snapshot s)
+    {
+        snapshot = s;
+        // analytics.json does not contain the on-demand all-time range.
+        // Preserve the separately loaded all-time data across the 1-second snapshot refresh loop.
+        snapshot.apps_all = _allTimeApps;
+        RenderList();
+    }
+
+    void UpdateDatePickerState()
+    {
+        var selectedDayMode = period.SelectedIndex == 6;
+
+        datePicker.Visibility = selectedDayMode ? Visibility.Visible : Visibility.Collapsed;
+        datePicker.IsEnabled = selectedDayMode;
+
+        if (selectedDayMode)
+        {
+            Grid.SetColumn(datePicker, 1);
+            Grid.SetColumnSpan(datePicker, 1);
+            Grid.SetColumn(search, 2);
+            Grid.SetColumnSpan(search, 1);
+        }
+        else
+        {
+            // For all range presets, keep the search box in the date-picker
+            // position so the filter bar stays compact and consistent.
+            Grid.SetColumn(search, 1);
+            Grid.SetColumnSpan(search, 2);
+        }
+    }
+
+    void UpdateDaySummary()
+    {
+        if (period.SelectedIndex != 6)
+        {
+            daySummary.Text = "";
+            return;
+        }
+        var selected = SelectedDay;
+        if (!selected.HasValue)
+        {
+            daySummary.Text = _language == LanguageMode.English ? "Select a date to view recorded apps." : _language == LanguageMode.TraditionalChinese ? "選擇日期以查看已記錄的應用程式。" : "选择日期以查看已记录的应用。";
+            return;
+        }
+        var total = _selectedDayData?.total_seconds ?? 0;
+        var dateText = selected.Value.ToString(_language == LanguageMode.English ? "MMM d, yyyy" : "yyyy年M月d日");
+        daySummary.Text = _language == LanguageMode.English
+            ? $"{dateText} · {UiHelpers.Format(total, _language)} recorded"
+            : _language == LanguageMode.TraditionalChinese
+                ? $"{dateText} · 已記錄 {UiHelpers.Format(total, _language)}"
+                : $"{dateText} · 已记录 {UiHelpers.Format(total, _language)}";
+    }
 
     void RenderList()
     {
-        var source = period.SelectedIndex switch
+        AppStat[] source;
+        long denominator;
+        switch (period.SelectedIndex)
         {
-            1 => snapshot.apps_week,
-            2 => snapshot.apps_month,
-            3 => snapshot.apps_half_year,
-            4 => snapshot.apps_year,
-            5 => snapshot.apps_all,
-            _ => snapshot.apps
-        };
-        var apps = source.Where(x => UiHelpers.FriendlyName(x, _language).Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase)).ToArray();
+            case 1: source = snapshot.apps_week; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+            case 2: source = snapshot.apps_month; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+            case 3: source = snapshot.apps_half_year; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+            case 4: source = snapshot.apps_year; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+            case 5: source = _allTimeApps; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+            case 6: source = _selectedDayData?.apps ?? Array.Empty<AppStat>(); denominator = _selectedDayData?.total_seconds ?? source.Sum(x => Math.Max(0, x.seconds)); break;
+            default: source = snapshot.apps; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
+        }
+
+        var apps = source
+            .Where(x => UiHelpers.FriendlyName(x, _language).Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
         var wanted = new HashSet<string>(apps.Select(Key), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var key in rows.Keys.Where(k => !wanted.Contains(k)).ToArray()) {
-            list.Children.Remove(rows[key].Border); rows.Remove(key);
+        foreach (var key in rows.Keys.Where(k => !wanted.Contains(k)).ToArray())
+        {
+            list.Children.Remove(rows[key].Border);
+            rows.Remove(key);
         }
-        foreach (var app in apps) {
+
+        foreach (var app in apps)
+        {
             var key = Key(app);
             if (!rows.TryGetValue(key, out var row))
             {
-                row = new AppRow(app, _language, _accentColor);
+                row = new AppRow(app, _language, _accentColor, _showAppDetailsAsync);
                 rows[key] = row;
             }
             row.ApplyAccent(_accentColor);
-            row.Update(app, source.Sum(x => x.seconds), _language);
+            row.Update(app, denominator, _language);
         }
 
         var ordered = apps.Select(a => rows[Key(a)].Border).ToArray();
         bool same = ordered.Length == list.Children.Count &&
             ordered.Select((x, i) => ReferenceEquals(x, list.Children[i])).All(x => x);
-        if (!same) {
+        if (!same)
+        {
             list.Children.Clear();
             foreach (var item in ordered) list.Children.Add(item);
+        }
+
+        bool isAllTime = period.SelectedIndex == 5;
+        if (isAllTime && _allTimeLoading)
+        {
+            emptyState.Text = _language == LanguageMode.English
+                ? "Loading all-time usage…"
+                : _language == LanguageMode.TraditionalChinese
+                    ? "正在載入全部時間使用資料…"
+                    : "正在加载全部时间使用数据…";
+            emptyState.Visibility = Visibility.Visible;
+            list.Visibility = Visibility.Collapsed;
+        }
+        else if (isAllTime && !_allTimeLoaded)
+        {
+            emptyState.Text = _language == LanguageMode.English
+                ? "Loading all-time usage…"
+                : _language == LanguageMode.TraditionalChinese
+                    ? "正在載入全部時間使用資料…"
+                    : "正在加载全部时间使用数据…";
+            emptyState.Visibility = Visibility.Visible;
+            list.Visibility = Visibility.Collapsed;
+        }
+        else if (apps.Length == 0)
+        {
+            emptyState.Text = _language == LanguageMode.English
+                ? "No recorded app usage for this period."
+                : _language == LanguageMode.TraditionalChinese
+                    ? "此期間沒有已記錄的應用程式使用資料。"
+                    : "此时间段没有已记录的应用使用数据。";
+            emptyState.Visibility = Visibility.Visible;
+            list.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            emptyState.Visibility = Visibility.Collapsed;
+            list.Visibility = Visibility.Visible;
         }
     }
 
@@ -561,15 +1006,18 @@ public sealed class AppsPage : Page
         readonly TextBlock name, path, time;
         readonly ProgressBar bar;
         readonly WinUIImage icon;
+        readonly Func<AppStat, Task>? onDetails;
         string iconKey = "";
+        AppStat _app = new();
         static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
-        public AppRow(AppStat app, LanguageMode language, UIColor accentColor)
+        public AppRow(AppStat app, LanguageMode language, UIColor accentColor, Func<AppStat, Task>? onDetails)
         {
+            this.onDetails = onDetails;
             var grid = new Grid { Padding = new Thickness(10), ColumnSpacing = 14 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
 
             icon = new WinUIImage { Width = 36, Height = 36, Stretch = Stretch.Uniform };
             Grid.SetColumn(icon, 0); grid.Children.Add(icon);
@@ -586,19 +1034,32 @@ public sealed class AppsPage : Page
             right.Children.Add(time); right.Children.Add(bar);
             Grid.SetColumn(right, 2); grid.Children.Add(right);
 
-            Border = new Border { Child = grid, BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
-                BorderThickness = new Thickness(0, 0, 0, 1) };
+            Border = new Border
+            {
+                Child = grid,
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                IsHitTestVisible = true
+            };
+            Border.Tapped += async (_, _) =>
+            {
+                if (this.onDetails is not null)
+                    await this.onDetails(_app);
+            };
             Update(app, 0, language);
         }
 
-        public void Update(AppStat app, long today, LanguageMode language)
+        public void Update(AppStat app, long total, LanguageMode language)
         {
+            _app = app;
             name.Text = UiHelpers.FriendlyName(app, language);
-            path.Text = app.name + (string.IsNullOrWhiteSpace(app.exe_path) ? "" : " · " + app.exe_path);
+            path.Text = AppCategoryResolver.Get(app.name, language) + " · " + app.name + (string.IsNullOrWhiteSpace(app.exe_path) ? "" : " · " + app.exe_path);
             time.Text = UiHelpers.Format(app.seconds, language);
-            bar.Value = Math.Min(100, app.seconds * 100.0 / Math.Max(1, today));
-            if (!string.Equals(iconKey, app.exe_path, StringComparison.OrdinalIgnoreCase)) {
-                iconKey = app.exe_path; SetIcon(app);
+            bar.Value = Math.Min(100, app.seconds * 100.0 / Math.Max(1, total));
+            if (!string.Equals(iconKey, app.exe_path, StringComparison.OrdinalIgnoreCase))
+            {
+                iconKey = app.exe_path;
+                SetIcon(app);
             }
         }
 
@@ -615,7 +1076,8 @@ public sealed class AppsPage : Page
 
         void SetIcon(AppStat app)
         {
-            try {
+            try
+            {
                 if (string.IsNullOrWhiteSpace(app.exe_path) || !File.Exists(app.exe_path)) { icon.Source = null; return; }
                 if (IconCache.TryGetValue(app.exe_path, out var cached)) { icon.Source = cached; return; }
                 using var ico = Icon.ExtractAssociatedIcon(app.exe_path);
@@ -628,7 +1090,8 @@ public sealed class AppsPage : Page
                 if (!File.Exists(file)) using (var bmp = ico.ToBitmap()) bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
                 var bitmap = new BitmapImage(new Uri(file));
                 IconCache[app.exe_path] = bitmap; icon.Source = bitmap;
-            } catch { }
+            }
+            catch { }
         }
     }
 }
@@ -641,7 +1104,6 @@ public sealed class StatsPage : Page
     readonly List<ColumnDefinition> trendColumns = new();
     readonly Border trendHoverCard;
     readonly TextBlock trendHoverText;
-    int _hoveredTrendIndex = -1;
     readonly StackPanel top = new();
     readonly List<TopAppRow> topRows = new();
     readonly TextBlock topEmpty = new();
@@ -651,13 +1113,17 @@ public sealed class StatsPage : Page
     readonly TextBlock topTitle = new();
     readonly ComboBox period = new();
     readonly TextBlock periodHint = new();
+    readonly Func<int, Task>? _loadPeriodAsync;
+    RangeUsageResponse? _allTimeData;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
     UIColor _accentColor = ThemeManager.DefaultAccent;
+    bool _updatingPeriod;
     const double TrendColumnWidth = 60.0;
 
-    public StatsPage()
+    public StatsPage(Func<int, Task>? loadPeriodAsync = null)
     {
+        _loadPeriodAsync = loadPeriodAsync;
         var root = new Grid { Padding = new Thickness(28), RowSpacing = 14 };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -684,7 +1150,7 @@ public sealed class StatsPage : Page
         period.Items.Add("近一年");
         period.Items.Add("全部时间");
         period.SelectedIndex = 0;
-        period.SelectionChanged += (_, _) => RenderCurrentSnapshot();
+        period.SelectionChanged += Period_SelectionChanged;
         Grid.SetColumn(period, 0);
         filterRow.Children.Add(period);
         periodHint.VerticalAlignment = VerticalAlignment.Center;
@@ -737,9 +1203,9 @@ public sealed class StatsPage : Page
 
         for (int i = 0; i < maxTrendColumns; i++)
         {
-            var day = new Grid { VerticalAlignment = VerticalAlignment.Stretch, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
-            day.RowDefinitions.Add(new RowDefinition { Height = new GridLength(222) });
-            day.RowDefinitions.Add(new RowDefinition { Height = new GridLength(28) });
+            var columnDay = new Grid { VerticalAlignment = VerticalAlignment.Stretch, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+            columnDay.RowDefinitions.Add(new RowDefinition { Height = new GridLength(222) });
+            columnDay.RowDefinitions.Add(new RowDefinition { Height = new GridLength(28) });
 
             var barArea = new Grid { Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Bottom };
             var baseline = new Border
@@ -762,7 +1228,7 @@ public sealed class StatsPage : Page
             };
             barArea.Children.Add(bar);
             Grid.SetRow(barArea, 0);
-            day.Children.Add(barArea);
+            columnDay.Children.Add(barArea);
 
             var label = new TextBlock
             {
@@ -772,14 +1238,14 @@ public sealed class StatsPage : Page
                 Opacity = .7
             };
             Grid.SetRow(label, 1);
-            day.Children.Add(label);
+            columnDay.Children.Add(label);
 
             int dayIndex = i;
-            day.PointerEntered += (_, _) => ShowTrendHover(dayIndex);
-            day.PointerMoved += (_, _) => ShowTrendHover(dayIndex);
-            day.PointerExited += (_, _) => HideTrendHover(dayIndex);
-            Grid.SetColumn(day, i);
-            chart.Children.Add(day);
+            columnDay.PointerEntered += (_, _) => ShowTrendHover(dayIndex);
+            columnDay.PointerMoved += (_, _) => ShowTrendHover(dayIndex);
+            columnDay.PointerExited += (_, _) => HideTrendHover(dayIndex);
+            Grid.SetColumn(columnDay, i);
+            chart.Children.Add(columnDay);
             trend.Add(new TrendColumn(label, bar, baseline));
         }
 
@@ -836,6 +1302,25 @@ public sealed class StatsPage : Page
         Content = root;
     }
 
+    async void Period_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingPeriod || period.SelectedIndex < 0) return;
+        if (period.SelectedIndex == 4 && _loadPeriodAsync is not null)
+            await _loadPeriodAsync(4);
+        else if (period.SelectedIndex != 4)
+            _allTimeData = null;
+        RenderCurrentSnapshot();
+    }
+
+    public long? AllTimeTotal => _allTimeData?.total_seconds;
+
+    public void SetAllTimeData(RangeUsageResponse? data)
+    {
+        _allTimeData = data;
+        if (period.SelectedIndex == 4)
+            RenderCurrentSnapshot();
+    }
+
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
@@ -855,11 +1340,15 @@ public sealed class StatsPage : Page
         var hant = language == LanguageMode.TraditionalChinese;
         title.Text = en ? "Statistics" : hant ? "統計" : "统计";
         description.Text = en
-            ? "Review recent screen-time trends and application usage from the local history."
-            : hant ? "查看本機歷史記錄中的近期使用時間趨勢與應用程式使用情況。"
-            : "查看本地历史记录中的近期使用时长趋势与应用使用情况。";
-        periodHint.Text = en ? "All statistics are calculated from local records." : hant ? "所有統計資料均來自本機歷史記錄。" : "所有统计数据均来自本机历史记录。";
+            ? "Review screen-time trends and application usage from the local history."
+            : hant ? "查看本機歷史記錄中的使用時間趨勢與應用程式使用情況。"
+            : "查看本机历史记录中的使用时长趋势与应用使用情况。";
+        periodHint.Text = en
+            ? "Percentages show each app's share of the selected period."
+            : hant ? "百分比表示各應用程式在所選期間的使用時間佔比。"
+            : "百分比表示各应用在所选时间段中的使用时间占比。";
         var selectedPeriod = Math.Clamp(period.SelectedIndex < 0 ? 0 : period.SelectedIndex, 0, 4);
+        _updatingPeriod = true;
         period.Items.Clear();
         if (en)
         {
@@ -886,16 +1375,17 @@ public sealed class StatsPage : Page
             period.Items.Add("全部时间");
         }
         period.SelectedIndex = selectedPeriod;
+        _updatingPeriod = false;
         trendHoverCard.Visibility = Visibility.Collapsed;
-        _hoveredTrendIndex = -1;
         trendTitle.Text = en ? "Daily usage trend" : hant ? "每日使用趨勢" : "每日使用趋势";
-        topTitle.Text = en ? "Top apps" : hant ? "應用程式排行" : "应用排行";
-        summaryTitles[0].Text = en ? "Period total" : hant ? "週期總計" : "周期总计";
+        topTitle.Text = en ? "Top apps · usage share" : hant ? "應用程式排行 · 使用時間佔比" : "应用排行 · 使用时间占比";
+        summaryTitles[0].Text = en ? "Period total" : hant ? "期間總計" : "时间段总计";
         summaryTitles[1].Text = en ? "Daily average" : hant ? "日均使用" : "日均使用";
         summaryTitles[2].Text = en ? "Active days" : hant ? "活躍天數" : "活跃天数";
         summaryTitles[3].Text = en ? "Peak day" : hant ? "最高單日" : "最高单日";
         RenderCurrentSnapshot();
     }
+
     public void UpdateSnapshot(Snapshot s)
     {
         _lastSnapshot = s;
@@ -907,7 +1397,9 @@ public sealed class StatsPage : Page
         if (_lastSnapshot is null) return;
 
         var rawDays = GetSelectedDailyData();
-        var total = rawDays.Sum(x => Math.Max(0, x.seconds));
+        var total = period.SelectedIndex == 4 && _allTimeData is not null
+            ? _allTimeData.total_seconds
+            : rawDays.Sum(x => Math.Max(0, x.seconds));
         var average = rawDays.Length == 0 ? 0 : (long)Math.Round(total / (double)rawDays.Length);
         var activeDays = rawDays.Count(x => x.seconds > 0);
         var peak = rawDays.OrderByDescending(x => x.seconds).FirstOrDefault();
@@ -915,9 +1407,7 @@ public sealed class StatsPage : Page
         summary[0].Text = UiHelpers.Format(total, _language);
         summary[1].Text = UiHelpers.Format(average, _language);
         summary[2].Text = activeDays.ToString();
-        summary[3].Text = peak is null
-            ? "—"
-            : $"{peak.label}\n{UiHelpers.Format(peak.seconds, _language)}";
+        summary[3].Text = peak is null ? "—" : $"{peak.label}\n{UiHelpers.Format(peak.seconds, _language)}";
 
         var displayDays = BuildTrendPoints(rawDays);
         for (int i = 0; i < trendColumns.Count; i++)
@@ -952,7 +1442,7 @@ public sealed class StatsPage : Page
             1 => _lastSnapshot.apps_90_days,
             2 => _lastSnapshot.apps_half_year,
             3 => _lastSnapshot.apps_year,
-            4 => _lastSnapshot.apps_all,
+            4 => _allTimeData?.apps ?? Array.Empty<AppStat>(),
             _ => _lastSnapshot.apps_30_days
         };
         var topApps = apps.Take(10).ToArray();
@@ -972,12 +1462,14 @@ public sealed class StatsPage : Page
             topRows.RemoveAt(topRows.Count - 1);
         }
 
+        var denominator = Math.Max(1, total);
         for (int i = 0; i < topApps.Length; i++)
         {
             var app = topApps[i];
             var row = topRows[i];
             row.Name.Text = UiHelpers.FriendlyName(app, _language);
-            row.Value.Text = UiHelpers.Format(app.seconds, _language);
+            var share = app.seconds * 100.0 / denominator;
+            row.Value.Text = $"{UiHelpers.Format(app.seconds, _language)}  ·  {share:F1}%";
             UiHelpers.SetAppIcon(row.Icon, app);
         }
     }
@@ -990,7 +1482,7 @@ public sealed class StatsPage : Page
             1 => _lastSnapshot.daily_year.TakeLast(Math.Min(90, _lastSnapshot.daily_year.Length)).ToArray(),
             2 => _lastSnapshot.daily_year.TakeLast(Math.Min(183, _lastSnapshot.daily_year.Length)).ToArray(),
             3 => _lastSnapshot.daily_year.TakeLast(Math.Min(365, _lastSnapshot.daily_year.Length)).ToArray(),
-            4 => _lastSnapshot.daily_all,
+            4 => _allTimeData?.daily ?? Array.Empty<JsonDaily>(),
             _ => _lastSnapshot.daily.TakeLast(Math.Min(30, _lastSnapshot.daily.Length)).ToArray()
         };
     }
@@ -999,9 +1491,6 @@ public sealed class StatsPage : Page
     {
         if (raw.Length <= 365)
             return raw.Select(x => (x.label, x.seconds)).ToArray();
-
-        // All-time histories can span several years. Aggregate them by month so
-        // the chart stays readable while summary totals still use the raw days.
         return raw
             .GroupBy(x => x.label.Length >= 7 ? x.label[..7] : x.label)
             .Select(g => (g.Key, g.Sum(x => Math.Max(0, x.seconds))))
@@ -1010,30 +1499,22 @@ public sealed class StatsPage : Page
 
     static string FormatTrendLabel(string raw)
     {
-        if (DateTime.TryParseExact(raw, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var day))
+        if (DateTime.TryParseExact(raw, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day))
             return day.ToString("MM-dd");
-
-        if (DateTime.TryParseExact(raw, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var month))
+        if (DateTime.TryParseExact(raw, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var month))
             return month.ToString("yy-MM");
-
         return raw;
     }
 
     void ShowTrendHover(int index)
     {
         if (_lastSnapshot is null || index < 0 || index >= trend.Count) return;
-
         var points = BuildTrendPoints(GetSelectedDailyData());
         if (index >= points.Length)
         {
-            _hoveredTrendIndex = -1;
             trendHoverCard.Visibility = Visibility.Collapsed;
             return;
         }
-
-        _hoveredTrendIndex = index;
         var item = points[index];
         trendHoverText.Text = _language == LanguageMode.English
             ? $"{item.label}: {UiHelpers.Format(item.seconds, _language)}"
@@ -1048,27 +1529,14 @@ public sealed class StatsPage : Page
         trendHoverCard.Visibility = Visibility.Visible;
     }
 
-    void HideTrendHover(int index)
-    {
-        if (_hoveredTrendIndex == index)
-        {
-            _hoveredTrendIndex = -1;
-            trendHoverCard.Visibility = Visibility.Collapsed;
-        }
-    }
+    void HideTrendHover(int index) => trendHoverCard.Visibility = Visibility.Collapsed;
 
     sealed class TrendColumn
     {
         public TextBlock Label { get; }
         public Border Bar { get; }
         public Border Baseline { get; }
-
-        public TrendColumn(TextBlock label, Border bar, Border baseline)
-        {
-            Label = label;
-            Bar = bar;
-            Baseline = baseline;
-        }
+        public TrendColumn(TextBlock label, Border bar, Border baseline) { Label = label; Bar = bar; Baseline = baseline; }
     }
 
     sealed class TopAppRow
@@ -1077,24 +1545,18 @@ public sealed class StatsPage : Page
         public WinUIImage Icon { get; }
         public TextBlock Name { get; }
         public TextBlock Value { get; }
-
         public TopAppRow()
         {
             Root = new Grid { ColumnSpacing = 12, Height = 36 };
             Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             Root.ColumnDefinitions.Add(new ColumnDefinition());
-            Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
-
+            Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(155) });
             Icon = new WinUIImage { Width = 28, Height = 28, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
             Root.Children.Add(Icon);
-
             Name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(Name, 1);
-            Root.Children.Add(Name);
-
+            Grid.SetColumn(Name, 1); Root.Children.Add(Name);
             Value = new TextBlock { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(Value, 2);
-            Root.Children.Add(Value);
+            Grid.SetColumn(Value, 2); Root.Children.Add(Value);
         }
     }
 
@@ -1108,21 +1570,9 @@ public sealed class StatsPage : Page
             BorderThickness = new Thickness(1)
         };
         var p = new StackPanel { Spacing = 5 };
-        title = new TextBlock
-        {
-            Opacity = .65,
-            TextWrapping = TextWrapping.Wrap,
-            TextTrimming = TextTrimming.None
-        };
+        title = new TextBlock { Opacity = .65, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None };
         p.Children.Add(title);
-        value = new TextBlock
-        {
-            Text = "—",
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-            MaxLines = 2
-        };
+        value = new TextBlock { Text = "—", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, MaxLines = 2 };
         p.Children.Add(value);
         b.Child = p;
         Grid.SetColumn(b, col);
@@ -1151,10 +1601,14 @@ public sealed class SettingsPage : Page
     bool startupEnabled;
     readonly ComboBox theme, language;
     ColorPicker colorPicker = null!;
-    readonly TextBlock pageTitle, generalTitle, appearanceTitle, aboutTitle, startupText, languageTitle, aboutText;
-    readonly TextBlock paletteTitle, customColorTitle, termsTitle, accentHint, dataTitle, dataHint;
-    readonly Button exportDataButton, importDataButton, deleteAllDataButton;
+    readonly TextBlock pageTitle, generalTitle, appearanceTitle, startupText, languageTitle, aboutText;
+    readonly TextBlock dataSectionTitle, legalSectionTitle, advancedTitle, aboutTitle;
+    readonly TextBlock themeModeLabel, languageModeLabel, legalHint, dataCardTitle;
+    readonly TextBlock paletteTitle, customColorTitle, accentHint, dataHint;
+    readonly TextBlock dataLocationTitle, dataLocationText, dataLocationHint;
+    readonly Button exportDataButton, importDataButton, deleteAllDataButton, openDataFolderButton, pauseButton, backupButton, diagnosticsButton;
     readonly Expander themeColorsExpander;
+    readonly Border dataCard, legalCard, advancedCard;
     readonly StackPanel themeContent;
     readonly Grid colorPickerHost;
     readonly Border colorSpectrumInputSurface;
@@ -1170,6 +1624,7 @@ public sealed class SettingsPage : Page
     LanguageMode _language;
     LanguageMode _languagePreference;
     UIColor _accentColor;
+    bool _monitorPaused;
 
     public event EventHandler<ThemeMode>? ThemeModeChanged;
     public event EventHandler<LanguageMode>? LanguageChanged;
@@ -1177,6 +1632,9 @@ public sealed class SettingsPage : Page
     public event EventHandler? ExportDataRequested;
     public event EventHandler? ImportDataRequested;
     public event EventHandler? DeleteAllDataRequested;
+    public event EventHandler? PauseRequested;
+    public event EventHandler? BackupRequested;
+    public event EventHandler? DiagnosticsRequested;
 
     public SettingsPage(ThemeMode mode, LanguageMode languageMode, UIColor accentColor)
     {
@@ -1184,17 +1642,36 @@ public sealed class SettingsPage : Page
         _language = LanguageResolver.Resolve(languageMode);
         _accentColor = accentColor;
 
-        var p = new StackPanel { Spacing = 18, Padding = new Thickness(28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
-        pageTitle = new TextBlock { FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        generalTitle = new TextBlock { FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        var p = new StackPanel
+        {
+            Spacing = 24,
+            Padding = new Thickness(28),
+            MaxWidth = 860,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+
+        pageTitle = new TextBlock
+        {
+            FontSize = 30,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
         p.Children.Add(pageTitle);
+
+        // General
+        generalTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
         p.Children.Add(generalTitle);
 
         startupEnabled = StartupEnabled();
         startupText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.NoWrap
+            TextWrapping = TextWrapping.Wrap
         };
         startupBox = new Border
         {
@@ -1209,22 +1686,36 @@ public sealed class SettingsPage : Page
         {
             ColumnSpacing = 12,
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(14)
         };
         startupToggle.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        startupToggle.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        startupToggle.ColumnDefinitions.Add(new ColumnDefinition());
         Grid.SetColumn(startupBox, 0);
         Grid.SetColumn(startupText, 1);
         startupToggle.Children.Add(startupBox);
         startupToggle.Children.Add(startupText);
         startupToggle.PointerPressed += (_, _) => ToggleStartup();
-        p.Children.Add(startupToggle);
+        p.Children.Add(CreateSettingsCard(startupToggle));
         ApplyStartupAccent(_accentColor);
 
-        appearanceTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        // Appearance
+        appearanceTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
         p.Children.Add(appearanceTitle);
 
-        theme = new ComboBox { Width = 240 };
+        themeModeLabel = new TextBlock
+        {
+            FontSize = 13,
+            Opacity = .65,
+            Margin = new Thickness(2, 0, 0, 0)
+        };
+        p.Children.Add(themeModeLabel);
+        theme = new ComboBox { Width = 260 };
         theme.SelectionChanged += Theme_SelectionChanged;
         ApplyComboBoxAccent(theme, _accentColor);
         p.Children.Add(theme);
@@ -1251,10 +1742,15 @@ public sealed class SettingsPage : Page
             paletteButtons[i] = button;
         }
 
-        customColorTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 0) };
+        customColorTitle = new TextBlock
+        {
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
         accentHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
 
-        themeContent = new StackPanel { Spacing = 8 };
+        themeContent = new StackPanel { Spacing = 8, Padding = new Thickness(14, 4, 14, 14) };
 
         colorPickerHost = new Grid();
         colorSpectrumInputSurface = new Border
@@ -1311,18 +1807,40 @@ public sealed class SettingsPage : Page
         {
             IsExpanded = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(0),
             Content = themeContent
         };
-        p.Children.Add(themeColorsExpander);
+        p.Children.Add(CreateSettingsCard(themeColorsExpander));
 
-        languageTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        // Language
+        languageTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
         p.Children.Add(languageTitle);
-        language = new ComboBox { Width = 240 };
+        languageModeLabel = new TextBlock
+        {
+            FontSize = 13,
+            Opacity = .65,
+            Margin = new Thickness(2, 0, 0, 0)
+        };
+        p.Children.Add(languageModeLabel);
+        language = new ComboBox { Width = 260 };
         language.SelectionChanged += Language_SelectionChanged;
         ApplyComboBoxAccent(language, _accentColor);
         p.Children.Add(language);
 
-        dataTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        // Data & Privacy
+        dataSectionTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        p.Children.Add(dataSectionTitle);
+
         dataHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
         exportDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         importDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
@@ -1330,30 +1848,144 @@ public sealed class SettingsPage : Page
         exportDataButton.Click += (_, _) => ExportDataRequested?.Invoke(this, EventArgs.Empty);
         importDataButton.Click += (_, _) => ImportDataRequested?.Invoke(this, EventArgs.Empty);
         deleteAllDataButton.Click += (_, _) => DeleteAllDataRequested?.Invoke(this, EventArgs.Empty);
-        var dataButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+        var dataButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
         dataButtons.Children.Add(exportDataButton);
         dataButtons.Children.Add(importDataButton);
         dataButtons.Children.Add(deleteAllDataButton);
-        p.Children.Add(dataTitle);
-        p.Children.Add(dataHint);
-        p.Children.Add(dataButtons);
+        var dataContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        dataCardTitle = new TextBlock
+        {
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        dataContent.Children.Add(dataCardTitle);
+        dataContent.Children.Add(dataHint);
+        dataContent.Children.Add(dataButtons);
+        dataCard = CreateSettingsCard(dataContent);
+        p.Children.Add(dataCard);
 
-        termsTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        p.Children.Add(termsTitle);
         termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         termsButton.Click += TermsButton_Click;
-        p.Children.Add(termsButton);
+        var legalContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        legalSectionTitle = new TextBlock
+        {
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        legalContent.Children.Add(legalSectionTitle);
+        legalHint = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap
+        };
+        legalContent.Children.Add(legalHint);
+        legalContent.Children.Add(termsButton);
+        legalCard = CreateSettingsCard(legalContent);
+        p.Children.Add(legalCard);
 
-        aboutTitle = new TextBlock { Margin = new Thickness(0, 15, 0, 0), FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        // Advanced
+        advancedTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        p.Children.Add(advancedTitle);
+
+        dataLocationTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        dataLocationText = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap,
+            Text = GetDataDirectory()
+        };
+        dataLocationHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+        openDataFolderButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        openDataFolderButton.Click += (_, _) => OpenDataFolder();
+        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        pauseButton.Click += (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty);
+        backupButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        backupButton.Click += (_, _) => BackupRequested?.Invoke(this, EventArgs.Empty);
+        diagnosticsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        diagnosticsButton.Click += (_, _) => DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
+        var advancedButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
+        advancedButtons.Children.Add(openDataFolderButton);
+        advancedButtons.Children.Add(pauseButton);
+        advancedButtons.Children.Add(backupButton);
+        advancedButtons.Children.Add(diagnosticsButton);
+        var advancedContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        advancedContent.Children.Add(dataLocationTitle);
+        advancedContent.Children.Add(dataLocationText);
+        advancedContent.Children.Add(dataLocationHint);
+        advancedContent.Children.Add(advancedButtons);
+        advancedCard = CreateSettingsCard(advancedContent);
+        p.Children.Add(advancedCard);
+
+        aboutTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
         p.Children.Add(aboutTitle);
-        aboutText = new TextBlock();
+
+        aboutText = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = .55,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(4, 0, 0, 0)
+        };
         p.Children.Add(aboutText);
-        Content = new ScrollViewer { Content = p };
+
+        Content = new ScrollViewer
+        {
+            Content = p,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
 
         SetLanguage(languageMode, LanguageResolver.Resolve(languageMode));
         SetThemeMode(mode);
         UpdatePaletteVisuals();
         LocalizeColorPickerText();
+    }
+
+    private static Border CreateSettingsCard(UIElement content) => new()
+    {
+        BorderBrush = new SolidColorBrush(UIColor.FromArgb(55, 128, 128, 128)),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(8),
+        Child = content,
+        HorizontalAlignment = HorizontalAlignment.Stretch
+    };
+
+    private static string GetDataDirectory() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ScreenTimeRS", "ScreenTime RS", "data");
+
+    private static void OpenDataFolder()
+    {
+        try
+        {
+            var path = GetDataDirectory();
+            Directory.CreateDirectory(path);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{path}\"",
+                UseShellExecute = true
+            });
+        }
+        catch { }
     }
 
     private void CreateColorPicker()
@@ -1771,6 +2403,15 @@ public sealed class SettingsPage : Page
     static UIColor ColorWithAlpha(UIColor color, byte alpha) =>
         UIColor.FromArgb(alpha, color.R, color.G, color.B);
 
+    public void SetMonitoringState(bool paused)
+    {
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        _monitorPaused = paused;
+        pauseButton.Content = paused ? (en ? "Resume recording" : hant ? "繼續記錄" : "继续记录") : (en ? "Pause recording" : hant ? "暫停記錄" : "暂停记录");
+        ToolTipService.SetToolTip(pauseButton, paused ? (en ? "Resume usage tracking" : hant ? "恢復使用時間記錄" : "恢复使用时间记录") : (en ? "Pause usage tracking" : hant ? "暂停使用时间记录" : "暂停使用时间记录"));
+    }
+
     public void SetThemeMode(ThemeMode mode)
     {
         updatingTheme = true;
@@ -1805,23 +2446,39 @@ public sealed class SettingsPage : Page
             : hant ? "選擇預設主題色或自由取色，修改後會立即套用到整個介面。"
             : "选择预设主题色或自由取色，修改后会立即应用到整个界面。";
         languageTitle.Text = en ? "Language" : hant ? "語言" : "语言";
-        dataTitle.Text = en ? "Data management" : hant ? "資料管理" : "数据管理";
+        dataSectionTitle.Text = en ? "Data & Privacy" : hant ? "資料與隱私" : "数据与隐私";
+        themeModeLabel.Text = en ? "Theme" : hant ? "主題" : "主题";
+        languageModeLabel.Text = en ? "Display language" : hant ? "顯示語言" : "显示语言";
         dataHint.Text = en
-            ? "Export or import local usage history. Deleting all data is permanent and requires confirmation."
-            : hant ? "匯出或匯入本機使用歷史記錄。刪除所有資料為永久操作，需經確認。"
-            : "导出或导入本机使用历史记录。删除全部数据为永久操作，需要确认。";
+            ? "Export or import local usage history. Importing creates an automatic local safety backup before replacement."
+            : hant ? "匯出或匯入本機使用歷史記錄。匯入取代資料前會自動建立本機安全備份。"
+            : "导出或导入本机使用历史记录。导入替换数据前会自动创建本地安全备份。";
+        dataCardTitle.Text = en ? "Data management" : hant ? "資料管理" : "数据管理";
         exportDataButton.Content = en ? "Export data" : hant ? "匯出資料" : "导出数据";
         importDataButton.Content = en ? "Import data" : hant ? "匯入資料" : "导入数据";
         deleteAllDataButton.Content = en ? "Delete all data" : hant ? "刪除所有資料" : "删除全部数据";
         deleteAllDataButton.Background = new SolidColorBrush(UIColor.FromArgb(230, 196, 43, 28));
         deleteAllDataButton.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-        termsTitle.Text = en ? "Terms & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私";
+        legalSectionTitle.Text = en ? "Terms & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私";
+        legalHint.Text = en ? "Review how ScreenTime RS records, stores, and handles local usage data." : hant ? "查看 ScreenTime RS 如何記錄、儲存及處理本機使用資料。" : "查看 ScreenTime RS 如何记录、存储和处理本机使用数据。";
         termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看用户条款与隐私政策";
+        advancedTitle.Text = en ? "Advanced" : hant ? "進階" : "高级";
         aboutTitle.Text = en ? "About" : hant ? "關於" : "关于";
+        dataLocationTitle.Text = en ? "Data location" : hant ? "資料位置" : "数据位置";
+        dataLocationHint.Text = en
+            ? "Usage records, snapshots, and automatic import backups are stored here."
+            : hant ? "使用記錄、快照與匯入前的自動備份會儲存在此處。"
+            : "使用记录、快照以及导入前的自动备份会存储在这里。";
+        openDataFolderButton.Content = en ? "Open data folder" : hant ? "開啟資料夾" : "打开数据文件夹";
+        openDataFolderButton.Content = en ? "Open data folder" : hant ? "開啟資料夾" : "打开数据文件夹";
+        pauseButton.Content = ""; // state is applied by SetMonitoringState
+        backupButton.Content = en ? "Create backup" : hant ? "建立備份" : "创建备份";
+        diagnosticsButton.Content = en ? "Diagnostics" : hant ? "診斷" : "诊断";
+        SetMonitoringState(_monitorPaused);
         aboutText.Text = en
-            ? "ScreenTime RS\nVersion 0.7.4\nRust monitoring core + WinUI 3 / Fluent UI"
-            : hant ? "ScreenTime RS\n版本 0.7.4\nRust 監控核心 + WinUI 3 / Fluent UI"
-            : "ScreenTime RS\n版本 0.7.4\nRust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS · Version 0.8.0 · Rust monitoring core + WinUI 3 / Fluent UI"
+            : hant ? "ScreenTime RS · 版本 0.8.0 · Rust 監控核心 + WinUI 3 / Fluent UI"
+            : "ScreenTime RS · 版本 0.8.0 · Rust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -1870,9 +2527,9 @@ public sealed class SettingsPage : Page
         await dialog.ShowAsync();
     }
 
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.7.4";
-    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.7.4";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.7.4";
+    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.8.0";
+    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.8.0";
+    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.8.0";
 
     static bool StartupEnabled()
     {
