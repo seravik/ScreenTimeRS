@@ -64,7 +64,6 @@ public static class ThemeManager
         resources["NavigationViewItemBackgroundSelected"] = new SolidColorBrush(Color.FromArgb(36, accent.R, accent.G, accent.B));
         resources["NavigationViewItemForegroundSelected"] = accentBrush;
         resources["NavigationViewItemIconForegroundSelected"] = accentBrush;
-        resources["ButtonBackgroundPressed"] = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.Black, .12));
         resources["CheckBoxCheckBackgroundFillOn"] = accentBrush;
         resources["CheckBoxCheckBackgroundFillOnPointerOver"] = accentLight;
         resources["CheckBoxCheckBackgroundFillOnPressed"] = accentDark;

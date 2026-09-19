@@ -1,9 +1,10 @@
-# ScreenTime RS v0.7.3
+# ScreenTime RS v0.7.4
 
 ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
 
-## v0.7.3
+## v0.7.4
 
+- Fixed the pressed-state appearance of buttons so standard buttons no longer switch to the application accent color while pressed.
 - Added **Traditional Chinese** and renamed the original Chinese option to **Simplified Chinese**.
 - Added local usage-data **export and import** using JSON backups.
 - Supported interface languages: Follow system, Simplified Chinese, Traditional Chinese, and English.
@@ -70,7 +71,7 @@ dist\ui\screentime-rs.exe
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.7.3-Setup.exe
+installer-output\ScreenTimeRS-v0.7.4-Setup.exe
 ```
 
 ## Usage-data backup
@@ -103,4 +104,4 @@ See [LICENSE](LICENSE).
 
 ## Version
 
-**v0.7.3**
+**v0.7.4**

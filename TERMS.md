@@ -1,6 +1,6 @@
 # ScreenTime RS Terms of Use
 
-Version: v0.7.3
+Version: v0.7.4
 
 1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.
 2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.
