@@ -1,6 +1,15 @@
-# ScreenTime RS v0.8.0
+# ScreenTime RS v0.9.0
 
 ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
+
+## v0.9.0
+
+- Added Focus with 15/25/30/45/60/90/120-minute presets and custom durations from 1 to 1440 minutes.
+- Added a persistent focus countdown managed by the Rust background collector.
+- Added pause, resume, end, daily focus totals, completion count, pause count, and paged focus history with deletion and safe cleanup.
+- Focus automatically stops accumulating time while Windows is locked, the computer is inactive for a prolonged period, or global usage tracking is paused.
+- Focus history is stored locally and included in JSON backup and restore; history is loaded 20 records at a time to keep the interface responsive.
+- Screen-time accounting and focus time remain separate metrics.
 
 ## v0.8.0
 
@@ -11,7 +20,7 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 - Improved Windows lock/session-state detection and screen-time accounting accuracy.
 - Split the live runtime snapshot from slower historical analytics to reduce refresh overhead as history grows.
 - Safer data import with validation and an automatic local SQLite backup before replacement.
-- Simplified the Settings page by collapsing infrequently used sections.
+- Improved the Settings page with clearer functional sections, data-location access, and advanced controls.
 
 ## Core features
 
@@ -26,6 +35,7 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 - Local SQLite storage with JSON export/import and automatic pre-import backup.
 - Windows system-tray support and optional background startup.
 - Light, dark, system, and custom accent-color themes.
+- Focus sessions with persistent countdowns, pause/resume, automatic inactivity pause, and focus history.
 
 ## Architecture
 
@@ -75,16 +85,16 @@ dist\ui\screentime-rs.exe
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.8.0-Setup.exe
+installer-output\ScreenTimeRS-v0.9.0-Setup.exe
 ```
 
 ## Usage-data backup
 
 Export and import are available from **Settings → Data management**.
 
-The backup format is JSON and contains the locally recorded application-usage history. Importing validates the data and automatically creates a local SQLite backup before replacing the current usage history. Settings are not included in the backup.
+The backup format is JSON and contains the locally recorded application-usage and focus history. Importing validates the data and automatically creates a local SQLite backup before replacing the current recorded history. Settings are not included in the backup.
 
-The delete-all-data action removes the recorded usage history. It does not remove application settings or uninstall the program.
+The delete-all-data action removes recorded usage and focus history. It does not remove application settings or uninstall the program.
 
 ## Local data
 
@@ -120,4 +130,4 @@ See [LICENSE](LICENSE).
 
 ## Version
 
-**v0.8.0**
+**v0.9.0**

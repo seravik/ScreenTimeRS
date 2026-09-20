@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.8.0"
+#define MyAppVersion "0.9.0"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.8.0-Setup
+OutputBaseFilename=ScreenTimeRS-v0.9.0-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -61,7 +61,7 @@ Name: "{autodesktop}\ScreenTime RS"; Filename: "{app}\{#MyAppExeName}"; Tasks: d
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ScreenTimeRS"; ValueData: """{app}\screentime-rs.exe"" --background"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch ScreenTime RS"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch ScreenTime RS"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

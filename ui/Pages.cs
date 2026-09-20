@@ -2252,27 +2252,79 @@ public sealed class SettingsPage : Page
         var labels = en
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["更多"] = "More", ["更多功能"] = "More", ["更少"] = "Less", ["红色"] = "Red", ["绿色"] = "Green",
-                ["蓝色"] = "Blue", ["青色"] = "Cyan", ["紫色"] = "Purple", ["洋红色"] = "Magenta",
-                ["粉色"] = "Pink", ["橙色"] = "Orange", ["黄色"] = "Yellow", ["白色"] = "White", ["灰色"] = "Gray",
-                ["黑色"] = "Black", ["浅蓝色"] = "Light blue", ["浅绿色"] = "Light green",
-                ["色调"] = "Hue", ["饱和度"] = "Saturation", ["值"] = "Value",
-                ["透明度"] = "Alpha", ["十六进制"] = "Hex", ["颜色"] = "Color"
+                ["更多"] = "More", ["更多功能"] = "More", ["More"] = "More",
+                ["更少"] = "Less", ["Less"] = "Less",
+                ["红色"] = "Red", ["紅色"] = "Red", ["Red"] = "Red",
+                ["绿色"] = "Green", ["綠色"] = "Green", ["Green"] = "Green",
+                ["蓝色"] = "Blue", ["藍色"] = "Blue", ["Blue"] = "Blue",
+                ["青色"] = "Cyan", ["Cyan"] = "Cyan", ["紫色"] = "Purple", ["Purple"] = "Purple",
+                ["洋红色"] = "Magenta", ["洋紅色"] = "Magenta", ["Magenta"] = "Magenta",
+                ["粉色"] = "Pink", ["粉紅色"] = "Pink", ["Pink"] = "Pink",
+                ["橙色"] = "Orange", ["Orange"] = "Orange",
+                ["黄色"] = "Yellow", ["黃色"] = "Yellow", ["Yellow"] = "Yellow",
+                ["白色"] = "White", ["White"] = "White", ["灰色"] = "Gray", ["Gray"] = "Gray",
+                ["黑色"] = "Black", ["Black"] = "Black",
+                ["浅蓝色"] = "Light blue", ["淺藍色"] = "Light blue", ["Light blue"] = "Light blue",
+                ["浅绿色"] = "Light green", ["淺綠色"] = "Light green", ["Light green"] = "Light green",
+                ["色调"] = "Hue", ["色調"] = "Hue", ["色相"] = "Hue", ["Hue"] = "Hue",
+                ["饱和度"] = "Saturation", ["飽和度"] = "Saturation", ["Saturation"] = "Saturation",
+                ["值"] = "Value", ["明度"] = "Value", ["Value"] = "Value",
+                ["透明度"] = "Alpha", ["Alpha"] = "Alpha",
+                ["十六进制"] = "Hex", ["十六進位"] = "Hex", ["十六進制"] = "Hex", ["Hex"] = "Hex",
+                ["颜色"] = "Color", ["顏色"] = "Color", ["Color"] = "Color"
             }
             : hant
                 ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["更多"] = "更多", ["More"] = "更多", ["更少"] = "更少", ["紅色"] = "紅色", ["红色"] = "紅色", ["綠色"] = "綠色", ["绿色"] = "綠色",
-                    ["藍色"] = "藍色", ["蓝色"] = "藍色", ["青色"] = "青色", ["紫色"] = "紫色", ["洋紅色"] = "洋紅色", ["洋红色"] = "洋紅色",
-                    ["粉紅色"] = "粉紅色", ["粉色"] = "粉紅色", ["橙色"] = "橙色", ["黄色"] = "黃色", ["黃色"] = "黃色",
-                    ["白色"] = "白色", ["灰色"] = "灰色", ["黑色"] = "黑色", ["浅蓝色"] = "淺藍色", ["浅绿色"] = "淺綠色",
-                    ["色调"] = "色相", ["色調"] = "色相", ["饱和度"] = "飽和度", ["值"] = "明度", ["透明度"] = "透明度",
-                    ["十六进制"] = "十六進位", ["十六進制"] = "十六進位", ["颜色"] = "顏色", ["顏色"] = "顏色",
-                    ["Red"] = "紅色", ["Green"] = "綠色", ["Blue"] = "藍色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋紅色", ["Pink"] = "粉紅色", ["Orange"] = "橙色", ["Yellow"] = "黃色", ["White"] = "白色", ["Gray"] = "灰色", ["Black"] = "黑色", ["Light blue"] = "淺藍色", ["Light green"] = "淺綠色", ["Hue"] = "色相", ["Saturation"] = "飽和度", ["Value"] = "明度", ["Alpha"] = "透明度", ["Hex"] = "十六進位", ["Color"] = "顏色", ["Less"] = "更少"
+                    // Also normalize Simplified/English remnants so switching from Simplified
+                    // Chinese to Traditional Chinese cannot leave mixed-locale ColorPicker labels.
+                    ["更多"] = "更多", ["More"] = "更多", ["更少"] = "更少", ["Less"] = "更少",
+                    ["紅色"] = "紅色", ["红色"] = "紅色", ["Red"] = "紅色",
+                    ["綠色"] = "綠色", ["绿色"] = "綠色", ["Green"] = "綠色",
+                    ["藍色"] = "藍色", ["蓝色"] = "藍色", ["Blue"] = "藍色",
+                    ["青色"] = "青色", ["Cyan"] = "青色", ["紫色"] = "紫色", ["Purple"] = "紫色",
+                    ["洋紅色"] = "洋紅色", ["洋红色"] = "洋紅色", ["Magenta"] = "洋紅色",
+                    ["粉紅色"] = "粉紅色", ["粉色"] = "粉紅色", ["Pink"] = "粉紅色",
+                    ["橙色"] = "橙色", ["Orange"] = "橙色",
+                    ["黄色"] = "黃色", ["黃色"] = "黃色", ["Yellow"] = "黃色",
+                    ["白色"] = "白色", ["White"] = "白色", ["灰色"] = "灰色", ["Gray"] = "灰色",
+                    ["黑色"] = "黑色", ["Black"] = "黑色",
+                    ["浅蓝色"] = "淺藍色", ["淺藍色"] = "淺藍色", ["Light blue"] = "淺藍色",
+                    ["浅绿色"] = "淺綠色", ["淺綠色"] = "淺綠色", ["Light green"] = "淺綠色",
+                    ["色调"] = "色相", ["色調"] = "色相", ["Hue"] = "色相",
+                    ["饱和度"] = "飽和度", ["飽和度"] = "飽和度", ["Saturation"] = "飽和度",
+                    ["值"] = "明度", ["明度"] = "明度", ["Value"] = "明度",
+                    ["透明度"] = "透明度", ["Alpha"] = "透明度",
+                    ["十六进制"] = "十六進位", ["十六進位"] = "十六進位", ["Hex"] = "十六進位",
+                    ["颜色"] = "顏色", ["顏色"] = "顏色", ["Color"] = "顏色"
                 }
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["More"] = "更多", ["Less"] = "更少", ["Red"] = "红色", ["Green"] = "绿色", ["Blue"] = "蓝色", ["Cyan"] = "青色", ["Purple"] = "紫色", ["Magenta"] = "洋红色", ["Pink"] = "粉色", ["Orange"] = "橙色", ["Yellow"] = "黄色", ["White"] = "白色", ["Gray"] = "灰色", ["Black"] = "黑色", ["Light blue"] = "浅蓝色", ["Light green"] = "浅绿色", ["Hue"] = "色调", ["Saturation"] = "饱和度", ["Value"] = "值", ["Alpha"] = "透明度", ["Hex"] = "十六进制", ["Color"] = "颜色"
+                    // WinUI ColorPicker can retain labels from the previous UI locale when the
+                    // control is already materialized. Map both English and Traditional Chinese
+                    // source labels so switching to Simplified Chinese always produces Simplified
+                    // Chinese text instead of a mix of locales.
+                    ["More"] = "更多", ["更多"] = "更多", ["更少"] = "更少", ["Less"] = "更少",
+                    ["Red"] = "红色", ["红色"] = "红色", ["紅色"] = "红色",
+                    ["Green"] = "绿色", ["绿色"] = "绿色", ["綠色"] = "绿色",
+                    ["Blue"] = "蓝色", ["蓝色"] = "蓝色", ["藍色"] = "蓝色",
+                    ["Cyan"] = "青色", ["青色"] = "青色",
+                    ["Purple"] = "紫色", ["紫色"] = "紫色",
+                    ["Magenta"] = "洋红色", ["洋红色"] = "洋红色", ["洋紅色"] = "洋红色",
+                    ["Pink"] = "粉色", ["粉色"] = "粉色", ["粉紅色"] = "粉色",
+                    ["Orange"] = "橙色", ["橙色"] = "橙色",
+                    ["Yellow"] = "黄色", ["黄色"] = "黄色", ["黃色"] = "黄色",
+                    ["White"] = "白色", ["白色"] = "白色",
+                    ["Gray"] = "灰色", ["灰色"] = "灰色",
+                    ["Black"] = "黑色", ["黑色"] = "黑色",
+                    ["Light blue"] = "浅蓝色", ["浅蓝色"] = "浅蓝色", ["淺藍色"] = "浅蓝色",
+                    ["Light green"] = "浅绿色", ["浅绿色"] = "浅绿色", ["淺綠色"] = "浅绿色",
+                    ["Hue"] = "色调", ["色调"] = "色调", ["色調"] = "色调",
+                    ["Saturation"] = "饱和度", ["饱和度"] = "饱和度", ["飽和度"] = "饱和度",
+                    ["Value"] = "值", ["值"] = "值", ["明度"] = "值",
+                    ["Alpha"] = "透明度", ["透明度"] = "透明度",
+                    ["Hex"] = "十六进制", ["十六进制"] = "十六进制", ["十六進位"] = "十六进制", ["十六進制"] = "十六进制",
+                    ["Color"] = "颜色", ["颜色"] = "颜色", ["顏色"] = "颜色"
                 };
 
         ReplaceColorPickerStrings(colorPicker, labels);
@@ -2461,7 +2513,7 @@ public sealed class SettingsPage : Page
         deleteAllDataButton.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
         legalSectionTitle.Text = en ? "Terms & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私";
         legalHint.Text = en ? "Review how ScreenTime RS records, stores, and handles local usage data." : hant ? "查看 ScreenTime RS 如何記錄、儲存及處理本機使用資料。" : "查看 ScreenTime RS 如何记录、存储和处理本机使用数据。";
-        termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看用户条款与隐私政策";
+        termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看使用条款与隐私政策";
         advancedTitle.Text = en ? "Advanced" : hant ? "進階" : "高级";
         aboutTitle.Text = en ? "About" : hant ? "關於" : "关于";
         dataLocationTitle.Text = en ? "Data location" : hant ? "資料位置" : "数据位置";
@@ -2470,15 +2522,14 @@ public sealed class SettingsPage : Page
             : hant ? "使用記錄、快照與匯入前的自動備份會儲存在此處。"
             : "使用记录、快照以及导入前的自动备份会存储在这里。";
         openDataFolderButton.Content = en ? "Open data folder" : hant ? "開啟資料夾" : "打开数据文件夹";
-        openDataFolderButton.Content = en ? "Open data folder" : hant ? "開啟資料夾" : "打开数据文件夹";
         pauseButton.Content = ""; // state is applied by SetMonitoringState
         backupButton.Content = en ? "Create backup" : hant ? "建立備份" : "创建备份";
         diagnosticsButton.Content = en ? "Diagnostics" : hant ? "診斷" : "诊断";
         SetMonitoringState(_monitorPaused);
         aboutText.Text = en
-            ? "ScreenTime RS · Version 0.8.0 · Rust monitoring core + WinUI 3 / Fluent UI"
-            : hant ? "ScreenTime RS · 版本 0.8.0 · Rust 監控核心 + WinUI 3 / Fluent UI"
-            : "ScreenTime RS · 版本 0.8.0 · Rust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS · Version 0.9.0 · Rust monitoring core + WinUI 3 / Fluent UI"
+            : hant ? "ScreenTime RS · 版本 0.9.0 · Rust 監控核心 + WinUI 3 / Fluent UI"
+            : "ScreenTime RS · 版本 0.9.0 · Rust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
@@ -2516,7 +2567,7 @@ public sealed class SettingsPage : Page
                 MaxHeight = 520,
                 Content = new TextBlock
                 {
-                    Text = en ? TermsEnglish : hant ? TermsTraditional : TermsChinese,
+                    Text = LegalDocuments.Combined(_language),
                     TextWrapping = TextWrapping.Wrap,
                     LineHeight = 22
                 }
@@ -2526,10 +2577,6 @@ public sealed class SettingsPage : Page
         };
         await dialog.ShowAsync();
     }
-
-    const string TermsChinese = "使用条款\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间。统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。\n\n最后更新：ScreenTime RS v0.8.0";
-    const string TermsTraditional = "使用條款\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。\n\n最後更新：ScreenTime RS v0.8.0";
-    const string TermsEnglish = "Terms of Use\n\n1. ScreenTime RS is designed to record Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPrivacy Policy\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy.\n\nLast updated: ScreenTime RS v0.8.0";
 
     static bool StartupEnabled()
     {

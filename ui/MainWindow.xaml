@@ -4,7 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:local="using:ScreenTimeRS.UI"
     mc:Ignorable="d">
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
@@ -31,6 +30,7 @@
                     <NavigationViewItem x:Name="NavOverview" Content="概览" Tag="overview" Icon="Home"/>
                     <NavigationViewItem x:Name="NavApps" Content="应用使用时间" Tag="apps" Icon="AllApps"/>
                     <NavigationViewItem x:Name="NavStats" Content="统计" Tag="stats" Icon="Library"/>
+                    <NavigationViewItem x:Name="NavFocus" Content="专注" Tag="focus" Icon="Play"/>
                     <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
                 </NavigationView.MenuItems>
                 <Frame x:Name="ContentFrame"/>
@@ -39,8 +39,8 @@
             <!-- Invisible full-height resize hit area on the navigation pane edge.
                  The standard horizontal-resize cursor is the only visual cue. -->
             <Canvas x:Name="NavResizeCanvas" IsHitTestVisible="True">
-                <local:NavigationResizeHandle x:Name="NavResizeHandle"
-                        Width="22"
+                <Border x:Name="NavResizeHandle"
+                        Width="6"
                         Height="1"
                         Background="Transparent"
                         HorizontalAlignment="Left"

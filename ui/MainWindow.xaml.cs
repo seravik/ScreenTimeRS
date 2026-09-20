@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -41,15 +42,22 @@ public sealed partial class MainWindow : Window
     private const string LanguageModeValue = "LanguageMode";
     private const string NavigationPaneLengthValue = "NavigationPaneLength";
     private const string AccentColorValue = "AccentColor";
-    private const string TermsAcceptedValue = "TermsAccepted_v0_7_0";
+    private const string TermsAcceptedValue = "TermsAccepted_v0_9_0";
     private double _savedPaneLength = 320;
     private bool _resizingPane;
     private Snapshot _latestSnapshot = new();
     private uint _resizePointerId;
+    private int _lastFocusCompletedCount = -1;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = false)]
+    private static extern bool MessageBeep(uint uType);
 
     private readonly OverviewPage _overviewPage;
     private readonly AppsPage _appsPage;
     private readonly StatsPage _statsPage;
+    private FocusPage? _focusPage;
+    private UIElement? _focusContent;
+    private readonly FocusHistoryPage _focusHistoryPage;
     private readonly SettingsPage _settingsPage;
 
     private LanguageMode UiLanguage => LanguageResolver.Resolve(_languageMode);
@@ -57,7 +65,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        NavResizeHandle.SetResizeCursor();
+        SetResizeCursor(NavResizeHandle);
 
         // ProjectDirs::data_local_dir() on Windows resolves to:
         // %LOCALAPPDATA%\ScreenTimeRS\ScreenTime RS\data
@@ -105,6 +113,9 @@ public sealed partial class MainWindow : Window
         _overviewPage = new OverviewPage();
         _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
         _statsPage = new StatsPage(LoadStatsPeriodAsync);
+        _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, ReturnToFocusPage, RefreshRecentFocusHistory);
+        _focusHistoryPage.ApplyAccent(accent);
+        _focusHistoryPage.ApplyLanguage(UiLanguage);
         _settingsPage = new SettingsPage(_themeMode, _languageMode, accent);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
         _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
@@ -148,6 +159,22 @@ public sealed partial class MainWindow : Window
                 AppWindow.SetIcon(iconPath);
                 AppWindow.SetTaskbarIcon(iconPath);
             }
+        }
+        catch { }
+    }
+
+
+    private static void SetResizeCursor(UIElement element)
+    {
+        try
+        {
+            var cursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+            typeof(UIElement).InvokeMember(
+                "ProtectedCursor",
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.SetProperty,
+                binder: null,
+                target: element,
+                args: new object?[] { cursor });
         }
         catch { }
     }
@@ -312,6 +339,8 @@ public sealed partial class MainWindow : Window
         _overviewPage?.ApplyAccent(color);
         _appsPage?.ApplyAccent(color);
         _statsPage?.ApplyAccent(color);
+        _focusPage?.ApplyAccent(color);
+        _focusHistoryPage?.ApplyAccent(color);
         _settingsPage?.ApplyAccent(color);
     }
 
@@ -331,6 +360,7 @@ public sealed partial class MainWindow : Window
         ApplyNavigationItemResources(NavOverview, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavApps, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavStats, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavFocus, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavSettings, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
 
         // NavigationViewItem keeps its materialized template/resources. Rebuilding
@@ -351,6 +381,7 @@ public sealed partial class MainWindow : Window
                     Nav.MenuItems.Add(NavOverview);
                     Nav.MenuItems.Add(NavApps);
                     Nav.MenuItems.Add(NavStats);
+                    Nav.MenuItems.Add(NavFocus);
                     Nav.MenuItems.Add(NavSettings);
                     Nav.OpenPaneLength = _savedPaneLength;
                     if (!string.IsNullOrWhiteSpace(selectedTag))
@@ -441,24 +472,29 @@ public sealed partial class MainWindow : Window
                 NavOverview.Content = "Overview";
                 NavApps.Content = "App usage";
                 NavStats.Content = "Statistics";
+                NavFocus.Content = "Focus";
                 NavSettings.Content = "Settings";
                 break;
             case LanguageMode.TraditionalChinese:
                 NavOverview.Content = "概覽";
                 NavApps.Content = "應用程式使用時間";
                 NavStats.Content = "統計";
+                NavFocus.Content = "專注";
                 NavSettings.Content = "設定";
                 break;
             default:
                 NavOverview.Content = "概览";
                 NavApps.Content = "应用使用时间";
                 NavStats.Content = "统计";
+                NavFocus.Content = "专注";
                 NavSettings.Content = "设置";
                 break;
         }
         _overviewPage.ApplyLanguage(effective);
         _appsPage.ApplyLanguage(effective);
         _statsPage.ApplyLanguage(effective);
+        _focusPage?.ApplyLanguage(effective);
+        _focusHistoryPage.ApplyLanguage(effective);
         _settingsPage.SetLanguage(language, effective);
     }
 
@@ -531,11 +567,7 @@ public sealed partial class MainWindow : Window
         var uiLanguage = UiLanguage;
         var en = uiLanguage == LanguageMode.English;
         var hant = uiLanguage == LanguageMode.TraditionalChinese;
-        var fullText = en
-            ? "TERMS OF USE\n\nVersion: v0.8.0\n\n1. ScreenTime RS records Windows application and screen usage time locally for personal management and reference.\n2. The software is provided as implemented and may not work identically on every Windows environment, third-party application, or future system update.\n3. Users are responsible for reviewing the recorded scope and for decisions made based on the statistics.\n4. Do not use the software for activities that violate applicable laws or the legitimate rights of others.\n\nPRIVACY POLICY\n\nVersion: v0.8.0\n\n1. ScreenTime RS stores its core statistics locally and does not actively upload them to a remote server.\n2. To provide usage statistics, the software may store application names, executable paths, usage durations, and necessary local runtime state.\n3. Data is stored by default under the current Windows user's LocalAppData directory. Uninstalling the program does not automatically delete these statistics.\n4. The software does not collect personal information for advertising tracking and does not actively sell or share usage statistics with third parties.\n5. Windows, antivirus software, or other system components may have independent system-level access to data; those third-party practices are outside this policy."
-            : hant
-                ? "使用條款\n\n版本：v0.8.0\n\n1. ScreenTime RS 用於在本機統計 Windows 應用程式與螢幕使用時間，統計結果僅供個人管理與參考。\n2. 軟體依現有功能提供，不保證在所有 Windows 環境、第三方應用程式或未來系統更新中始終正常運作。\n3. 使用者應自行確認軟體記錄範圍，並對根據統計結果作出的決定負責。\n4. 不得利用本軟體進行違反適用法律法規或侵犯他人合法權益的活動。\n\n隱私權政策\n\n版本：v0.8.0\n\n1. ScreenTime RS 的核心統計資料儲存在本機，軟體不會主動上傳至遠端伺服器。\n2. 為提供統計功能，軟體可能儲存應用程式名稱、可執行檔路徑、使用時間以及必要的本機執行狀態。\n3. 資料預設儲存在目前 Windows 使用者的 LocalAppData 目錄中。解除安裝程式不會自動刪除這些統計資料。\n4. 軟體不會以廣告追蹤為目的收集個人資訊，也不會主動出售或分享統計資料給第三方。\n5. Windows、防毒軟體或其他系統元件可能具有獨立的系統層級資料存取能力；這些第三方行為不在本政策範圍內。"
-                : "使用条款\n\n版本：v0.8.0\n\n1. ScreenTime RS 用于在本机统计 Windows 应用与屏幕使用时间，统计结果仅供个人管理和参考。\n2. 软件按现有功能提供，不保证在所有 Windows 环境、第三方应用或未来系统更新中始终正常工作。\n3. 用户应自行确认软件记录范围，并对基于统计结果作出的决定负责。\n4. 不得利用本软件进行违反适用法律法规或侵犯他人合法权益的活动。\n\n隐私政策\n\n版本：v0.8.0\n\n1. ScreenTime RS 的核心统计数据保存在本机，不由软件主动上传到远程服务器。\n2. 为完成统计，软件可能保存应用名称、可执行文件路径、使用时长以及必要的本机运行状态。\n3. 数据默认存储在当前 Windows 用户的 LocalAppData 目录中。卸载程序不会自动删除这些统计数据。\n4. 软件不以广告追踪为目的收集个人信息，也不会主动将统计数据出售或共享给第三方。\n5. Windows、杀毒软件或其他系统组件可能拥有独立的系统级数据访问能力，本政策不涵盖这些第三方行为。";
+        var fullText = LegalDocuments.Combined(uiLanguage);
 
         var content = new ScrollViewer
         {
@@ -655,6 +687,74 @@ public sealed partial class MainWindow : Window
         catch { return null; }
     }
 
+    private UIElement GetFocusContent()
+    {
+        if (_focusContent is not null)
+            return _focusContent;
+
+        try
+        {
+            _focusPage = new FocusPage(RunCollectorCommandAsync, LoadFocusHistoryAsync, NavigateToFocusHistory);
+            _focusPage.ApplyAccent(LoadAccentColor());
+            _focusPage.ApplyLanguage(UiLanguage);
+            _focusContent = _focusPage;
+            return _focusContent;
+        }
+        catch (Exception ex)
+        {
+            LogFocusUiError(ex);
+            var en = UiLanguage == LanguageMode.English;
+            var hant = UiLanguage == LanguageMode.TraditionalChinese;
+            var page = new Page
+            {
+                Content = new Border
+                {
+                    Padding = new Thickness(28),
+                    Child = new StackPanel
+                    {
+                        Spacing = 12,
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = en ? "Focus" : hant ? "專注" : "专注",
+                                FontSize = 30,
+                                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                            },
+                            new TextBlock
+                            {
+                                Text = en ? "The Focus page could not be loaded." : hant ? "專注頁面無法載入。" : "专注页面无法加载。",
+                                TextWrapping = TextWrapping.Wrap
+                            },
+                            new TextBlock
+                            {
+                                Text = en ? "The app has kept the rest of the interface available. Check ui-crash.log for details." : hant ? "其餘功能仍可正常使用。詳細錯誤請查看 ui-crash.log。" : "其余功能仍可正常使用。详细错误请查看 ui-crash.log。",
+                                Opacity = .68,
+                                TextWrapping = TextWrapping.Wrap
+                            }
+                        }
+                    }
+                }
+            };
+            _focusContent = page;
+            return page;
+        }
+    }
+
+    private static void LogFocusUiError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ScreenTimeRS", "ScreenTime RS", "data");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "ui-crash.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Focus UI error\n{ex}\n\n");
+        }
+        catch { }
+    }
+
     private void ShowSelectedPage()
     {
         if (Nav.SelectedItem is not NavigationViewItem item) return;
@@ -664,6 +764,7 @@ public sealed partial class MainWindow : Window
             "overview" => _overviewPage,
             "apps" => _appsPage,
             "stats" => _statsPage,
+            "focus" => GetFocusContent(),
             "settings" => _settingsPage,
             _ => _overviewPage
         };
@@ -671,9 +772,73 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePages(Snapshot s)
     {
+        var wasFocusRunning = _latestSnapshot.focus_active || _latestSnapshot.focus_paused;
+        var justCompleted = _lastFocusCompletedCount >= 0
+            && s.focus_today_completed > _lastFocusCompletedCount
+            && wasFocusRunning
+            && !s.focus_active
+            && !s.focus_paused;
+
+        _lastFocusCompletedCount = (int)Math.Max(0, s.focus_today_completed);
         _latestSnapshot = s;
         _settingsPage.SetMonitoringState(s.paused);
+
+        if (justCompleted)
+            PlayFocusCompletionSound();
+
         UpdateVisiblePage();
+    }
+
+    private static void PlayFocusCompletionSound()
+    {
+        try
+        {
+            // Use the Windows information notification sound so the app does not
+            // need a bundled audio file or an additional media dependency.
+            MessageBeep(0x00000040); // MB_ICONINFORMATION
+        }
+        catch { }
+    }
+
+    private void NavigateToFocusHistory()
+    {
+        try
+        {
+            // Full focus history is a secondary page opened from the Focus page,
+            // not a top-level navigation item. Keep Focus selected in the shell.
+            ContentFrame.Content = _focusHistoryPage;
+            _focusHistoryPage.Refresh();
+        }
+        catch (Exception ex)
+        {
+            LogFocusUiError(ex);
+        }
+    }
+
+    private void RefreshRecentFocusHistory()
+    {
+        try
+        {
+            _focusPage?.RefreshHistory();
+        }
+        catch (Exception ex)
+        {
+            LogFocusUiError(ex);
+        }
+    }
+
+    private void ReturnToFocusPage()
+    {
+        try
+        {
+            ContentFrame.Content = GetFocusContent();
+            _focusPage?.RefreshHistory();
+            UpdateVisiblePage();
+        }
+        catch (Exception ex)
+        {
+            LogFocusUiError(ex);
+        }
     }
 
     private void UpdateVisiblePage()
@@ -685,6 +850,16 @@ public sealed partial class MainWindow : Window
                 break;
             case "stats":
                 _statsPage.UpdateSnapshot(_latestSnapshot);
+                break;
+            case "focus":
+                try
+                {
+                    _focusPage?.UpdateSnapshot(_latestSnapshot);
+                }
+                catch (Exception ex)
+                {
+                    LogFocusUiError(ex);
+                }
                 break;
             case "settings":
                 break;
@@ -786,7 +961,10 @@ public sealed partial class MainWindow : Window
         {
             NavResizeHandle.Visibility = Visibility.Visible;
             NavResizeHandle.Height = Math.Max(1, RootGrid.ActualHeight - 42);
-            Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 11));
+            // Keep the resize hit target deliberately narrow: only a small strip
+            // directly on the pane boundary should start resizing, similar to
+            // common desktop navigation panes.
+            Canvas.SetLeft(NavResizeHandle, Math.Max(0, Nav.OpenPaneLength - 3));
             Canvas.SetTop(NavResizeHandle, 0);
         }
         else
@@ -830,8 +1008,15 @@ public sealed partial class MainWindow : Window
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (_refreshingNavigationTheme) return;
-        ShowSelectedPage();
-        UpdateVisiblePage();
+        try
+        {
+            ShowSelectedPage();
+            UpdateVisiblePage();
+        }
+        catch (Exception ex)
+        {
+            LogFocusUiError(ex);
+        }
     }
 
     private async void SettingsPage_ExportDataRequested(object? sender, EventArgs e)
@@ -977,7 +1162,7 @@ public sealed partial class MainWindow : Window
         return exe;
     }
 
-    private async Task<bool> RunCollectorCommandAsync(string command, string argument)
+    private async Task<bool> RunCollectorCommandAsync(params string[] arguments)
     {
         try
         {
@@ -990,8 +1175,9 @@ public sealed partial class MainWindow : Window
                 CreateNoWindow = true,
                 WorkingDirectory = AppContext.BaseDirectory
             };
-            psi.ArgumentList.Add(command);
-            psi.ArgumentList.Add(argument);
+            if (arguments is null || arguments.Length == 0) return false;
+            foreach (var argument in arguments)
+                psi.ArgumentList.Add(argument);
             using var process = Process.Start(psi);
             if (process is null) return false;
             await process.WaitForExitAsync();
@@ -1072,6 +1258,18 @@ public sealed partial class MainWindow : Window
                 _statsPage.SetAllTimeData(data);
         }
         catch { }
+    }
+
+    private async Task<FocusSession[]?> LoadFocusHistoryAsync(int limit, int offset)
+    {
+        var text = await RunCollectorQueryAsync("--focus-history", limit.ToString(), offset.ToString());
+        if (text is null) return null;
+        try
+        {
+            var data = JsonSerializer.Deserialize<FocusHistoryResponse>(text);
+            return data?.sessions ?? Array.Empty<FocusSession>();
+        }
+        catch { return null; }
     }
 
     private async Task ShowAppDetailsAsync(AppStat app)
@@ -1257,6 +1455,20 @@ public sealed class Snapshot
     public long unlocks_today { get; set; }
     public bool paused { get; set; }
     public JsonDaily[] hourly_today { get; set; } = Array.Empty<JsonDaily>();
+    public bool focus_active { get; set; }
+    public bool focus_paused { get; set; }
+    public bool focus_auto_paused { get; set; }
+    public long focus_planned_seconds { get; set; }
+    public long focus_active_seconds { get; set; }
+    public long focus_remaining_seconds { get; set; }
+    public long focus_today_total { get; set; }
+    public long focus_today_completed { get; set; }
+    public long focus_today_pauses { get; set; }
+}
+
+public sealed class FocusHistoryResponse
+{
+    public FocusSession[] sessions { get; set; } = Array.Empty<FocusSession>();
 }
 
 public sealed class AnalyticsSnapshot

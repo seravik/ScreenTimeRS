@@ -19,6 +19,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
     <ApplicationIcon>..\assets\ScreenTimeRS.ico</ApplicationIcon>
     <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
     <EnableDefaultPageItems>true</EnableDefaultPageItems>
@@ -30,5 +31,7 @@
   <ItemGroup>
     <Content Include="..\assets\ScreenTimeRS.ico" Link="Assets\ScreenTimeRS.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\assets\ScreenTimeRS-titlebar.png" Link="Assets\ScreenTimeRS-titlebar.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\TERMS.md" Link="TERMS.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

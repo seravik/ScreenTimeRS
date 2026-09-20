@@ -24,7 +24,7 @@ use windows::Win32::{
 const APP_NAME: &str = "ScreenTime RS";
 const SHUTDOWN_FILE: &str = "shutdown.flag";
 const REFRESH_FILE: &str = "refresh.flag";
-const EXPORT_FORMAT_VERSION: u32 = 2;
+const EXPORT_FORMAT_VERSION: u32 = 3;
 const PAUSE_FILE: &str = "pause.flag";
 const ANALYTICS_REFRESH_INTERVAL: u8 = 5;
 #[derive(Clone, Default)]
@@ -64,6 +64,15 @@ struct Snapshot {
     unlocks_today: i64,
     paused: bool,
     hourly_today: Vec<(String, i64)>,
+    focus_active: bool,
+    focus_paused: bool,
+    focus_auto_paused: bool,
+    focus_planned_seconds: i64,
+    focus_active_seconds: i64,
+    focus_remaining_seconds: i64,
+    focus_today_total: i64,
+    focus_today_completed: i64,
+    focus_today_pauses: i64,
 }
 
 struct Database { path: std::path::PathBuf }
@@ -116,7 +125,22 @@ impl Database {
                  CREATE INDEX IF NOT EXISTS idx_usage_records_app
                    ON usage_records(app);
                  CREATE INDEX IF NOT EXISTS idx_usage_records_start_end
-                   ON usage_records(start_at, end_at);"
+                   ON usage_records(start_at, end_at);
+                 CREATE TABLE IF NOT EXISTS focus_sessions(
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   start_at TEXT NOT NULL,
+                   end_at TEXT,
+                   planned_seconds INTEGER NOT NULL,
+                   active_seconds INTEGER NOT NULL DEFAULT 0,
+                   pause_count INTEGER NOT NULL DEFAULT 0,
+                   status TEXT NOT NULL
+                 );
+                 CREATE INDEX IF NOT EXISTS idx_focus_sessions_start
+                   ON focus_sessions(start_at);
+                 CREATE TABLE IF NOT EXISTS focus_daily(
+                   date TEXT PRIMARY KEY,
+                   seconds INTEGER NOT NULL DEFAULT 0
+                 );"
             )?;
             let _ = c.execute("ALTER TABLE app_usage ADD COLUMN exe_path TEXT NOT NULL DEFAULT ''", []);
             // A continuous computer-activity session can contain multiple app
@@ -378,7 +402,7 @@ impl Database {
         Ok(rows.filter_map(Result::ok).collect())
     }
 
-    fn replace_all_records(&self, records: &[ExportRecord]) -> Result<()> {
+    fn replace_all_records(&self, records: &[ExportRecord], focus_sessions: &[FocusHistoryRecord], focus_daily: &[FocusDailyRecord]) -> Result<()> {
         Self::validate_records(records)?;
         let mut c = self.conn()?;
         let tx = c.transaction()?;
@@ -415,6 +439,18 @@ impl Database {
             let mut st = tx.prepare("INSERT INTO app_usage(date,app,seconds,exe_path) VALUES(?1,?2,?3,?4)")?;
             for ((date,app),(seconds,exe_path)) in daily_mirror {
                 st.execute(params![date,app,seconds,exe_path])?;
+            }
+        }
+        {
+            let mut st = tx.prepare("INSERT INTO focus_sessions(start_at,end_at,planned_seconds,active_seconds,pause_count,status) VALUES(?1,?2,?3,?4,?5,?6)")?;
+            for row in focus_sessions {
+                st.execute(params![row.start_at,row.end_at,row.planned_seconds,row.active_seconds,row.pause_count,row.status])?;
+            }
+        }
+        {
+            let mut st = tx.prepare("INSERT INTO focus_daily(date,seconds) VALUES(?1,?2)")?;
+            for row in focus_daily {
+                st.execute(params![row.date,row.seconds])?;
             }
         }
         tx.commit()?;
@@ -481,6 +517,207 @@ impl Database {
         let longest = by_session.values().copied().max().unwrap_or(0);
         Ok((total,longest))
     }
+    fn start_focus(&self, planned_seconds: i64) -> Result<i64> {
+        if !(60..=86_400).contains(&planned_seconds) {
+            anyhow::bail!("focus duration must be between 60 and 86400 seconds");
+        }
+        let c = self.conn()?;
+        let active: Option<i64> = c.query_row(
+            "SELECT id FROM focus_sessions WHERE status IN ('active','paused') ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        ).optional()?;
+        if active.is_some() {
+            anyhow::bail!("a focus session is already active");
+        }
+        let now = Local::now().to_rfc3339();
+        c.execute(
+            "INSERT INTO focus_sessions(start_at,end_at,planned_seconds,active_seconds,pause_count,status) VALUES(?1,NULL,?2,0,0,'active')",
+            params![now, planned_seconds],
+        )?;
+        Ok(c.last_insert_rowid())
+    }
+
+    fn pause_focus(&self) -> Result<bool> {
+        let c = self.conn()?;
+        let changed = c.execute(
+            "UPDATE focus_sessions SET status='paused',pause_count=pause_count+1 WHERE id=(SELECT id FROM focus_sessions WHERE status='active' ORDER BY id DESC LIMIT 1)",
+            [],
+        )?;
+        Ok(changed > 0)
+    }
+
+    fn resume_focus(&self) -> Result<bool> {
+        let c = self.conn()?;
+        let changed = c.execute(
+            "UPDATE focus_sessions SET status='active' WHERE id=(SELECT id FROM focus_sessions WHERE status='paused' ORDER BY id DESC LIMIT 1)",
+            [],
+        )?;
+        Ok(changed > 0)
+    }
+
+    fn stop_focus(&self) -> Result<bool> {
+        let c = self.conn()?;
+        let now = Local::now().to_rfc3339();
+        let changed = c.execute(
+            "UPDATE focus_sessions SET status='stopped',end_at=?1 WHERE id=(SELECT id FROM focus_sessions WHERE status IN ('active','paused') ORDER BY id DESC LIMIT 1)",
+            params![now],
+        )?;
+        Ok(changed > 0)
+    }
+
+    fn tick_focus(&self, computer_active: bool, seconds: i64, now: &str, today: NaiveDate) -> Result<()> {
+        if !computer_active || seconds <= 0 { return Ok(()); }
+        let mut c = self.conn()?;
+        let tx = c.transaction()?;
+        let row: Option<(i64,i64,i64)> = tx.query_row(
+            "SELECT id,planned_seconds,active_seconds FROM focus_sessions WHERE status='active' ORDER BY id DESC LIMIT 1",
+            [],
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?)),
+        ).optional()?;
+        let Some((id, planned, current)) = row else {
+            tx.commit()?;
+            return Ok(());
+        };
+        let remaining = (planned - current).max(0);
+        let applied = remaining.min(seconds);
+        if applied > 0 {
+            tx.execute(
+                "UPDATE focus_sessions SET active_seconds=active_seconds+?2 WHERE id=?1",
+                params![id, applied],
+            )?;
+            tx.execute(
+                "INSERT INTO focus_daily(date,seconds) VALUES(?1,?2) ON CONFLICT(date) DO UPDATE SET seconds=focus_daily.seconds+excluded.seconds",
+                params![today.to_string(), applied],
+            )?;
+        }
+        if applied >= remaining {
+            tx.execute(
+                "UPDATE focus_sessions SET status='completed',end_at=?2 WHERE id=?1 AND status='active'",
+                params![id, now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn focus_state(&self, today: NaiveDate, computer_active: bool) -> Result<(bool,bool,bool,i64,i64,i64,i64,i64,i64)> {
+        let c = self.conn()?;
+        let active = c.query_row(
+            "SELECT planned_seconds,active_seconds,status FROM focus_sessions WHERE status IN ('active','paused') ORDER BY id DESC LIMIT 1",
+            [],
+            |r| Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?)),
+        ).optional()?;
+        // Derive today's focus total from session records so history deletion
+        // cannot leave the summary value stale.
+        let today_total = c.query_row(
+            "SELECT COALESCE(SUM(active_seconds),0) FROM focus_sessions WHERE substr(start_at,1,10)=?1",
+            params![today.to_string()],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        let completed = c.query_row(
+            "SELECT COUNT(*) FROM focus_sessions WHERE status='completed' AND substr(COALESCE(end_at,start_at),1,10)=?1",
+            params![today.to_string()],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        let pauses = c.query_row(
+            "SELECT COALESCE(SUM(pause_count),0) FROM focus_sessions WHERE substr(start_at,1,10)=?1",
+            params![today.to_string()],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        if let Some((planned,active_seconds,status)) = active {
+            let manual_paused = status == "paused";
+            let auto_paused = status == "active" && !computer_active;
+            let paused = manual_paused || auto_paused;
+            let remaining = (planned - active_seconds).max(0);
+            return Ok((true,manual_paused,auto_paused,planned,active_seconds,remaining,today_total,completed,pauses));
+        }
+        Ok((false,false,false,0,0,0,today_total,completed,pauses))
+    }
+
+    fn focus_history(&self, limit: i64) -> Result<Vec<FocusHistoryRecord>> {
+        self.focus_history_page(limit, 0)
+    }
+
+    fn focus_history_page(&self, limit: i64, offset: i64) -> Result<Vec<FocusHistoryRecord>> {
+        let c = self.conn()?;
+        let mut st = c.prepare("SELECT id,start_at,end_at,planned_seconds,active_seconds,pause_count,status FROM focus_sessions ORDER BY id DESC LIMIT ?1 OFFSET ?2")?;
+        let rows = st.query_map(params![limit.max(1).min(100), offset.max(0)], |r| Ok(FocusHistoryRecord {
+            id:r.get(0)?, start_at:r.get(1)?, end_at:r.get(2)?, planned_seconds:r.get(3)?, active_seconds:r.get(4)?, pause_count:r.get(5)?, status:r.get(6)?
+        }))?;
+        Ok(rows.filter_map(Result::ok).collect())
+    }
+
+    fn rebuild_focus_daily(&self) -> Result<()> {
+        let mut c = self.conn()?;
+        let aggregated: Vec<(String, i64)> = {
+            let mut st = c.prepare(
+                "SELECT substr(start_at,1,10) AS date, COALESCE(SUM(active_seconds),0) FROM focus_sessions GROUP BY substr(start_at,1,10) ORDER BY date"
+            )?;
+            let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+            rows.filter_map(Result::ok).collect()
+        };
+        let tx = c.transaction()?;
+        tx.execute("DELETE FROM focus_daily", [])?;
+        for (date, seconds) in aggregated {
+            tx.execute("INSERT INTO focus_daily(date,seconds) VALUES(?1,?2)", params![date,seconds])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn delete_focus(&self, id: i64) -> Result<bool> {
+        if id <= 0 { return Ok(false); }
+        let c = self.conn()?;
+        let changed = c.execute(
+            "DELETE FROM focus_sessions WHERE id=?1 AND status NOT IN ('active','paused')",
+            params![id],
+        )?;
+        drop(c);
+        if changed > 0 { self.rebuild_focus_daily()?; }
+        Ok(changed > 0)
+    }
+
+    fn delete_all_focus_history(&self) -> Result<i64> {
+        let c = self.conn()?;
+        let changed = c.execute(
+            "DELETE FROM focus_sessions WHERE status NOT IN ('active','paused')",
+            [],
+        )? as i64;
+        drop(c);
+        self.rebuild_focus_daily()?;
+        Ok(changed)
+    }
+
+    fn focus_daily(&self) -> Result<Vec<FocusDailyRecord>> {
+        let c = self.conn()?;
+        let mut st = c.prepare("SELECT substr(start_at,1,10) AS date, COALESCE(SUM(active_seconds),0) FROM focus_sessions GROUP BY substr(start_at,1,10) ORDER BY date")?;
+        let rows = st.query_map([], |r| Ok(FocusDailyRecord { date:r.get(0)?, seconds:r.get(1)? }))?;
+        Ok(rows.filter_map(Result::ok).collect())
+    }
+
+    fn validate_focus(sessions: &[FocusHistoryRecord], daily: &[FocusDailyRecord]) -> Result<()> {
+        for s in sessions {
+            if s.planned_seconds < 60 || s.planned_seconds > 86_400 || s.active_seconds < 0 || s.active_seconds > s.planned_seconds || s.pause_count < 0 {
+                anyhow::bail!("invalid focus session values");
+            }
+            if parse_precise(&s.start_at).is_none() { anyhow::bail!("invalid focus session start time"); }
+            if let Some(end) = &s.end_at {
+                let start = parse_precise(&s.start_at).unwrap();
+                let finish = parse_precise(end).ok_or_else(|| anyhow::anyhow!("invalid focus session end time"))?;
+                if finish < start { anyhow::bail!("invalid focus session time range"); }
+            }
+            if !matches!(s.status.as_str(), "active"|"paused"|"completed"|"stopped") {
+                anyhow::bail!("invalid focus session status");
+            }
+        }
+        for d in daily {
+            NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").map_err(|_| anyhow::anyhow!("invalid focus daily date"))?;
+            if d.seconds < 0 { anyhow::bail!("invalid focus daily seconds"); }
+        }
+        Ok(())
+    }
+
     fn hourly_today(&self, today: NaiveDate) -> Result<Vec<(String,i64)>> {
         let mut out=vec![(String::new(),0i64);24];
         for h in 0u32..24 { out[h as usize].0=format!("{:02}:00",h); }
@@ -533,6 +770,8 @@ impl Database {
         c.execute("DELETE FROM app_usage",[])?;
         c.execute("DELETE FROM sessions",[])?;
         c.execute("DELETE FROM hourly_usage",[])?;
+        c.execute("DELETE FROM focus_sessions",[])?;
+        c.execute("DELETE FROM focus_daily",[])?;
         c.execute("DELETE FROM settings WHERE key LIKE 'unlocks:%'",[])?;
         Ok(())
     }
@@ -741,6 +980,32 @@ struct ExportFile {
     application: String,
     exported_at: String,
     records: Vec<ExportRecord>,
+    #[serde(default)]
+    focus_sessions: Vec<FocusHistoryRecord>,
+    #[serde(default)]
+    focus_daily: Vec<FocusDailyRecord>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct FocusHistoryRecord {
+    id: i64,
+    start_at: String,
+    end_at: Option<String>,
+    planned_seconds: i64,
+    active_seconds: i64,
+    pause_count: i64,
+    status: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct FocusDailyRecord {
+    date: String,
+    seconds: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FocusHistoryResponse {
+    sessions: Vec<FocusHistoryRecord>,
 }
 
 #[derive(serde::Serialize)]
@@ -763,6 +1028,15 @@ struct JsonSnapshot {
     unlocks_today: i64,
     paused: bool,
     hourly_today: Vec<JsonDaily>,
+    focus_active: bool,
+    focus_paused: bool,
+    focus_auto_paused: bool,
+    focus_planned_seconds: i64,
+    focus_active_seconds: i64,
+    focus_remaining_seconds: i64,
+    focus_today_total: i64,
+    focus_today_completed: i64,
+    focus_today_pauses: i64,
 }
 
 #[derive(serde::Serialize)]
@@ -870,6 +1144,15 @@ fn write_snapshot(s: &Snapshot) {
             unlocks_today: s.unlocks_today,
             paused: s.paused,
             hourly_today: s.hourly_today.iter().map(|(label,seconds)| JsonDaily { label: label.clone(), seconds: *seconds }).collect(),
+            focus_active: s.focus_active,
+            focus_paused: s.focus_paused,
+            focus_auto_paused: s.focus_auto_paused,
+            focus_planned_seconds: s.focus_planned_seconds,
+            focus_active_seconds: s.focus_active_seconds,
+            focus_remaining_seconds: s.focus_remaining_seconds,
+            focus_today_total: s.focus_today_total,
+            focus_today_completed: s.focus_today_completed,
+            focus_today_pauses: s.focus_today_pauses,
         };
         if let Ok(text) = serde_json::to_string(&data) {
             write_json_atomic(path, text);
@@ -943,6 +1226,7 @@ impl Collector {
                 let active = !paused && active_now(locked, idle, &app);
                 let now_local = Local::now();
                 let today_date = now_local.date_naive();
+                let _ = db.tick_focus(active, sec, &now_local.to_rfc3339(), today_date);
                 if !was_locked && locked { let _ = db.set_setting("last_lock", &now_local.to_rfc3339()); }
                 if was_locked && !locked { let _ = db.increment_unlocks(today_date); }
                 was_locked = locked;
@@ -1024,6 +1308,7 @@ impl Collector {
                 }
 
                 let apps = db.apps_today().unwrap_or_default();
+                let focus = db.focus_state(today, active).unwrap_or((false,false,false,0,0,0,0,0,0));
                 let snapshot = Snapshot {
                     current_app: app,
                     current_window: title,
@@ -1053,6 +1338,15 @@ impl Collector {
                     unlocks_today: db.unlocks_today(today).unwrap_or(0),
                     paused,
                     hourly_today: db.hourly_today(today).unwrap_or_default(),
+                    focus_active: focus.0,
+                    focus_paused: focus.1,
+                    focus_auto_paused: focus.2,
+                    focus_planned_seconds: focus.3,
+                    focus_active_seconds: focus.4,
+                    focus_remaining_seconds: focus.5,
+                    focus_today_total: focus.6,
+                    focus_today_completed: focus.7,
+                    focus_today_pauses: focus.8,
                 };
 
                 if let Ok(mut current) = snap.lock() {
@@ -1149,6 +1443,8 @@ fn handle_cli(args: &[String]) -> Result<bool> {
                 application: APP_NAME.to_string(),
                 exported_at: Local::now().to_rfc3339(),
                 records: db.export_records()?,
+                focus_sessions: db.focus_history(10_000)?,
+                focus_daily: db.focus_daily()?,
             };
             let target = std::path::PathBuf::from(path);
             if let Some(parent) = target.parent() {
@@ -1162,7 +1458,7 @@ fn handle_cli(args: &[String]) -> Result<bool> {
             let path = args.get(2).ok_or_else(|| anyhow::anyhow!("missing import path"))?;
             let text = std::fs::read_to_string(path)?;
             let export: ExportFile = serde_json::from_str(&text)?;
-            if export.format_version != EXPORT_FORMAT_VERSION {
+            if export.format_version != 2 && export.format_version != EXPORT_FORMAT_VERSION {
                 anyhow::bail!("unsupported usage data format");
             }
             if !export.application.is_empty() && export.application != APP_NAME {
@@ -1170,8 +1466,9 @@ fn handle_cli(args: &[String]) -> Result<bool> {
             }
             Database::validate_records(&export.records)?;
             let db = Database::new()?;
+            Database::validate_focus(&export.focus_sessions, &export.focus_daily)?;
             let _backup = db.backup_before_import()?;
-            db.replace_all_records(&export.records)?;
+            db.replace_all_records(&export.records, &export.focus_sessions, &export.focus_daily)?;
             request_refresh();
             Ok(true)
         }
@@ -1249,11 +1546,41 @@ fn handle_cli(args: &[String]) -> Result<bool> {
             print_json(&response)?;
             Ok(true)
         }
+        Some("--focus-start") => {
+            let seconds: i64 = args.get(2).ok_or_else(|| anyhow::anyhow!("missing focus duration"))?.parse().map_err(|_| anyhow::anyhow!("invalid focus duration"))?;
+            let db = Database::new()?;
+            db.start_focus(seconds)?;
+            request_refresh();
+            Ok(true)
+        }
+        Some("--focus-pause") => { let db=Database::new()?; if !db.pause_focus()? { anyhow::bail!("no active focus session"); } request_refresh(); Ok(true) }
+        Some("--focus-resume") => { let db=Database::new()?; if !db.resume_focus()? { anyhow::bail!("no paused focus session"); } request_refresh(); Ok(true) }
+        Some("--focus-stop") => { let db=Database::new()?; if !db.stop_focus()? { anyhow::bail!("no focus session to stop"); } request_refresh(); Ok(true) }
+        Some("--focus-history") => {
+            let limit: i64 = args.get(2).and_then(|v| v.parse().ok()).unwrap_or(20).clamp(1, 100);
+            let offset: i64 = args.get(3).and_then(|v| v.parse().ok()).unwrap_or(0).max(0);
+            let db=Database::new()?;
+            print_json(&FocusHistoryResponse { sessions: db.focus_history_page(limit, offset)? })?;
+            Ok(true)
+        }
+        Some("--focus-delete") => {
+            let id: i64 = args.get(2).ok_or_else(|| anyhow::anyhow!("missing focus id"))?.parse().map_err(|_| anyhow::anyhow!("invalid focus id"))?;
+            let db=Database::new()?;
+            let _ = db.delete_focus(id)?;
+            request_refresh();
+            Ok(true)
+        }
+        Some("--focus-delete-all") => {
+            let db=Database::new()?;
+            let _ = db.delete_all_focus_history()?;
+            request_refresh();
+            Ok(true)
+        }
         Some("--pause") => { set_paused(true); Ok(true) }
         Some("--resume") => { set_paused(false); request_refresh(); Ok(true) }
         Some("--backup") => { let db=Database::new()?; println!("{}", db.backup_now()?.display()); Ok(true) }
         Some("--data-dir") => { if let Some(p)=data_dir(){ println!("{}",p.display()); } Ok(true) }
-        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.8.0\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
+        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.9.0\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
         _ => Ok(false),
     }
 }
@@ -1276,6 +1603,7 @@ fn main()->Result<()> {
         let month_start=today.with_day(1).unwrap();
         let six_months_ago=today.checked_sub_months(Months::new(6)).unwrap_or(today);
         let year_ago=today.checked_sub_months(Months::new(12)).unwrap_or(today);
+        let initial_focus = db.focus_state(today, !is_paused()).unwrap_or((false,false,false,0,0,0,0,0,0));
         let initial=Snapshot {
             today:db.range_total(today,today).unwrap_or(0),
             yesterday:db.range_total(yesterday,yesterday).unwrap_or(0),
@@ -1296,6 +1624,15 @@ fn main()->Result<()> {
             longest_session_today:db.session_stats_today(today).unwrap_or((0,0)).1,
             unlocks_today:db.unlocks_today(today).unwrap_or(0),
             paused:is_paused(),
+            focus_active: initial_focus.0,
+            focus_paused: initial_focus.1,
+            focus_auto_paused: initial_focus.2,
+            focus_planned_seconds: initial_focus.3,
+            focus_active_seconds: initial_focus.4,
+            focus_remaining_seconds: initial_focus.5,
+            focus_today_total: initial_focus.6,
+            focus_today_completed: initial_focus.7,
+            focus_today_pauses: initial_focus.8,
             ..Snapshot::default()
         };
         if let Ok(mut current)=snap.lock() {

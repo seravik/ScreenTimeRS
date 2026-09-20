@@ -1,4 +1,4 @@
-# ScreenTime RS v0.8.0 — Unified usage data model
+# ScreenTime RS v0.9.0 — Unified usage data model
 
 This revision promotes usage timing to a canonical SQLite fact table: `usage_records`.
 
@@ -51,3 +51,14 @@ configured idle threshold). The dashboard metrics use this model:
 Schema marker `schema:unified-v2` indicates this `session_id` model has been applied.
 Existing unified-v1 precise records are conservatively treated as individual sessions,
 because their historical continuity across app switches was not recorded.
+
+
+## v0.9.0 focus model
+
+Focus is intentionally a separate productivity dataset from `usage_records`. Screen-time usage answers what was used; Focus answers whether a user intentionally ran a timed focus block.
+
+- `focus_sessions` stores start/end time, planned duration, active duration, pause count, and status.
+- `focus_daily` stores the actual accumulated focus seconds per local calendar day.
+- Lock, prolonged inactivity, and the global usage-recording pause do not add focus seconds.
+- Switching foreground applications does not end a focus session.
+- v0.9 exports include focus sessions and daily focus totals; v0.8 exports remain importable with empty focus data.
