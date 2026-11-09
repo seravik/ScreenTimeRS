@@ -1,3 +1,9 @@
+## v0.9.1
+### 修复
+- 修复导入 JSON 数据时专注历史被追加而非替换的问题；同一份备份重复导入不再产生重复的专注记录。
+- 修复导出 JSON 数据时专注历史被静默截断到 100 条的问题，导出现在包含完整专注历史。
+- 新增覆盖导入替换语义与 0 / 1 / 99 / 100 / 101 / 150 条分页边界的 Rust 单元测试。
+
 ## v0.9.0
 ### Fixes and refinements
 - Added a confirmation dialog before deleting an individual focus-history record from the full history page.

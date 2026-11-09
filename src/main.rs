@@ -87,7 +87,19 @@ impl Database {
         if !db_path.exists() && old_db.exists() {
             let _ = std::fs::copy(&old_db, &db_path);
         }
-        let db = Self { path: db_path };
+        Self::open_at(db_path)
+    }
+
+    /// Opens and initializes a database at an explicit path.
+    ///
+    /// `new()` resolves the user's data directory; keeping the actual setup
+    /// here lets tests exercise the real schema and migrations in a temporary
+    /// directory without touching real data.
+    fn open_at(path: std::path::PathBuf) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let db = Self { path };
         {
             let c = db.conn()?;
             c.execute_batch(
@@ -410,6 +422,11 @@ impl Database {
         tx.execute("DELETE FROM app_usage", [])?;
         tx.execute("DELETE FROM sessions", [])?;
         tx.execute("DELETE FROM hourly_usage", [])?;
+        // Import replaces the whole dataset. Focus history must be cleared with
+        // the usage tables, otherwise rows are appended to the existing history
+        // and the same import applied twice doubles the focus records.
+        tx.execute("DELETE FROM focus_sessions", [])?;
+        tx.execute("DELETE FROM focus_daily", [])?;
 
         // Import both legacy daily records and precision-preserving records produced
         // by the unified exporter. app_usage remains a compatibility mirror only.
@@ -636,7 +653,27 @@ impl Database {
     }
 
     fn focus_history(&self, limit: i64) -> Result<Vec<FocusHistoryRecord>> {
-        self.focus_history_page(limit, 0)
+        // `focus_history_page` clamps a single page to 100 rows for the UI.
+        // Walk pages here so a larger request (export needs the full history)
+        // is not silently truncated to one clamped page.
+        let limit = limit.max(0);
+        let mut sessions = Vec::new();
+        let mut offset = 0i64;
+        while (sessions.len() as i64) < limit {
+            let page_size = (limit - sessions.len() as i64).min(100);
+            let page = self.focus_history_page(page_size, offset)?;
+            let fetched = page.len() as i64;
+            sessions.extend(page);
+            if fetched < page_size {
+                break;
+            }
+            offset += fetched;
+        }
+        Ok(sessions)
+    }
+
+    fn focus_history_all(&self) -> Result<Vec<FocusHistoryRecord>> {
+        self.focus_history(i64::MAX)
     }
 
     fn focus_history_page(&self, limit: i64, offset: i64) -> Result<Vec<FocusHistoryRecord>> {
@@ -1443,7 +1480,7 @@ fn handle_cli(args: &[String]) -> Result<bool> {
                 application: APP_NAME.to_string(),
                 exported_at: Local::now().to_rfc3339(),
                 records: db.export_records()?,
-                focus_sessions: db.focus_history(10_000)?,
+                focus_sessions: db.focus_history_all()?,
                 focus_daily: db.focus_daily()?,
             };
             let target = std::path::PathBuf::from(path);
@@ -1580,7 +1617,7 @@ fn handle_cli(args: &[String]) -> Result<bool> {
         Some("--resume") => { set_paused(false); request_refresh(); Ok(true) }
         Some("--backup") => { let db=Database::new()?; println!("{}", db.backup_now()?.display()); Ok(true) }
         Some("--data-dir") => { if let Some(p)=data_dir(){ println!("{}",p.display()); } Ok(true) }
-        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.9.0\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
+        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.9.1\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
         _ => Ok(false),
     }
 }
@@ -1703,5 +1740,116 @@ fn main()->Result<()> {
         }
 
         thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_database(label: &str) -> (std::path::PathBuf, Database) {
+        let root = std::env::temp_dir().join(format!(
+            "screentime-rs-test-{}-{}",
+            std::process::id(),
+            label
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let db = Database::open_at(root.join("screentime.db")).expect("open test database");
+        (root, db)
+    }
+
+    fn insert_focus(db: &Database, index: i64, status: &str) -> i64 {
+        let c = db.conn().expect("open connection");
+        c.execute(
+            "INSERT INTO focus_sessions(start_at,end_at,planned_seconds,active_seconds,pause_count,status)
+             VALUES(?1,?2,?3,?4,?5,?6)",
+            rusqlite::params![
+                format!("2026-11-09T{:02}:{:02}:00+08:00", 8 + (index % 12), index % 60),
+                Option::<String>::None,
+                1500i64,
+                1200i64,
+                0i64,
+                status
+            ],
+        )
+        .expect("insert focus session");
+        c.last_insert_rowid()
+    }
+
+    fn focus_row_count(db: &Database, table: &str) -> i64 {
+        let c = db.conn().expect("open connection");
+        c.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .expect("count focus rows")
+    }
+
+    #[test]
+    fn export_reads_every_focus_session_across_page_boundaries() {
+        let (root, db) = temp_database("export-all");
+        for total in [0usize, 1, 99, 100, 101, 150] {
+            {
+                let c = db.conn().expect("open connection");
+                c.execute("DELETE FROM focus_sessions", []).expect("clear focus sessions");
+            }
+            for index in 0..total {
+                insert_focus(&db, index as i64, "completed");
+            }
+            assert_eq!(db.focus_history_all().unwrap().len(), total, "full history at {total}");
+            assert_eq!(db.focus_history(total as i64).unwrap().len(), total, "limited history at {total}");
+            assert_eq!(db.focus_history_page(10_000, 0).unwrap().len(), total.min(100), "page clamp at {total}");
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn import_replaces_focus_history_instead_of_appending() {
+        let (root, db) = temp_database("import-replace");
+        for index in 0..3 {
+            insert_focus(&db, index, "completed");
+        }
+        let incoming = vec![FocusHistoryRecord {
+            id: 0,
+            start_at: "2026-11-09T10:00:00+08:00".to_string(),
+            end_at: Some("2026-11-09T10:25:00+08:00".to_string()),
+            planned_seconds: 1500,
+            active_seconds: 1500,
+            pause_count: 0,
+            status: "completed".to_string(),
+        }];
+        let daily = vec![FocusDailyRecord { date: "2026-11-09".to_string(), seconds: 1500 }];
+
+        db.replace_all_records(&[], &incoming, &daily).unwrap();
+        assert_eq!(focus_row_count(&db, "focus_sessions"), 1, "import replaces sessions");
+        assert_eq!(focus_row_count(&db, "focus_daily"), 1, "import replaces daily totals");
+
+        db.replace_all_records(&[], &incoming, &daily).unwrap();
+        assert_eq!(focus_row_count(&db, "focus_sessions"), 1, "repeated import must not append");
+        assert_eq!(focus_row_count(&db, "focus_daily"), 1, "repeated import must not accumulate");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exported_history_round_trips_without_loss() {
+        let (root, db) = temp_database("roundtrip");
+        for index in 0..150 {
+            insert_focus(&db, index, "completed");
+        }
+        let export = ExportFile {
+            format_version: EXPORT_FORMAT_VERSION,
+            application: APP_NAME.to_string(),
+            exported_at: chrono::Local::now().to_rfc3339(),
+            records: db.export_records().unwrap(),
+            focus_sessions: db.focus_history_all().unwrap(),
+            focus_daily: db.focus_daily().unwrap(),
+        };
+        assert_eq!(export.focus_sessions.len(), 150, "export must not stop at 100");
+
+        let text = serde_json::to_string(&export).unwrap();
+        let parsed: ExportFile = serde_json::from_str(&text).unwrap();
+        Database::validate_focus(&parsed.focus_sessions, &parsed.focus_daily).unwrap();
+        db.replace_all_records(&parsed.records, &parsed.focus_sessions, &parsed.focus_daily).unwrap();
+        assert_eq!(db.focus_history_all().unwrap().len(), 150, "import restores every session");
+
+        let _ = std::fs::remove_dir_all(root);
     }
 }

@@ -1,8 +1,38 @@
+# Rust build output
 /target/
+
+# WinUI / .NET build output
 /dist/
-/installer-output/
 /ui/bin/
 /ui/obj/
 .vs/
 *.user
 *.suo
+
+# Inno Setup output and temporary files
+/installer-output/
+*.tmp
+
+# Local runtime data (must never be committed)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+snapshot.json
+analytics.json
+refresh.flag
+pause.flag
+shutdown.flag
+*.log
+
+# Local tooling and workspace state
+.cargo/
+.workbuddy/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archives
+*.zip

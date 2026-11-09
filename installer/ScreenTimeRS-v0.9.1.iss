@@ -1,5 +1,5 @@
 #define MyAppName "ScreenTime RS"
-#define MyAppVersion "0.9.0"
+#define MyAppVersion "0.9.1"
 #define MyAppPublisher "ScreenTime RS"
 #define MyAppExeName "ScreenTimeRS.UI.exe"
 
@@ -8,11 +8,15 @@ AppId={{8A0A5F6B-7D1B-4E1C-9B91-0A5E9E8A0B10}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} v{#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoDescription={#MyAppName} Setup
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ScreenTime RS
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=ScreenTimeRS-v0.9.0-Setup
+OutputBaseFilename=ScreenTimeRS-v0.9.1-Setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
