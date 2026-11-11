@@ -1,6 +1,6 @@
-# ScreenTime RS v0.9.2 — Unified usage data model
+# ScreenTime RS v0.9.3 — Unified usage data model
 
-The data model is unchanged from v0.9.0. v0.9.1 fixed JSON import/export of focus history, and v0.9.2 only changes the interface; no schema, table, or provider contract was modified.
+The data model is unchanged from v0.9.0. v0.9.1 fixed JSON import/export of focus history; v0.9.2 and v0.9.3 only change the interface; no schema, table, or provider contract was modified.
 
 This revision promotes usage timing to a canonical SQLite fact table: `usage_records`.
 

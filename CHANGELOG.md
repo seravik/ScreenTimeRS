@@ -1,3 +1,30 @@
+## v0.9.3
+
+### Interface
+- Rebuilt the front end on a small design system (`Ui.cs`) with a three-language string table (`Str.cs`) and one file per page; `Pages.cs` shrank from 1964 to 119 lines, and the retired pages and their `MainWindow` loading callbacks were deleted.
+- Rewrote Overview, Usage, Settings, and Focus around a consistent card layout; grouped Settings into clear sections and left-aligned its content on wide windows.
+- Split Usage into Trends and Apps tabs and Focus into Timer and History tabs; replaced `TabView` with lightweight text tabs, removing the close button and the `Ctrl+F4` tooltip.
+- Kept Simplified Chinese, Traditional Chinese, and English, and kept the chart hover tooltips.
+
+### Accent colour
+- Removed the custom accent colour picker and its registry setting. The app now uses a fixed classic blue (`#0078D4` on light, `#4CC2FF` on dark) and deliberately no longer follows the Windows personalisation colour.
+- Restored the stock WinUI selection styling and removed the dark selection overlay and the Settings section divider lines.
+- Unified the accent across the navigation indicator, tab underline, dropdown pills, toggles, progress bars, and dialog buttons with one shared set of brushes written into both the application resources and each theme dictionary.
+- Fixed the light theme showing the dark accent after a theme switch, the Usage tab underline not repainting, and `ContentDialog` default buttons still picking up the Windows purple accent.
+- Fixed the white-on-white check mark in dark mode by choosing the tick colour from the accent luminance.
+
+### Focus page
+- Stretched the timer page to the full content width instead of leaving an empty strip on the right.
+- Replaced the duration dropdown with a row of preset buttons (15/25/30/45/60/90/120 minutes and Custom), and picked a readable foreground for the selected and start buttons.
+
+### Fixes
+- Widened the trend chart bars, which had collapsed to a 2 px minimum width.
+- Fixed the pinned Settings header overflowing the content column.
+
+### Notes
+- The Terms of Use and Privacy Policy are unchanged from v0.9.2. The acceptance flag stays `TermsAccepted_v0_9_2`, so upgrading does not ask existing users to accept them again.
+- No schema, table, or data-provider contract was changed.
+
 ## v0.9.2
 
 ### Improvements

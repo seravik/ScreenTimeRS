@@ -16,7 +16,7 @@ namespace ScreenTimeRS.UI;
 /// </summary>
 public sealed class SettingsPage : Page
 {
-    const string Version = "0.9.2";
+    const string Version = "0.9.3";
 
     readonly TextBlock _title;
     readonly TextBlock _appearanceHeading, _themeLabel;

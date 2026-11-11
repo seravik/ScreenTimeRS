@@ -1,6 +1,15 @@
-# ScreenTime RS v0.9.2
+# ScreenTime RS v0.9.3
 
 ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
+
+## v0.9.3
+
+- Rebuilt the interface on a shared design system, with Overview, Usage, Focus, and Settings rewritten as separate pages; all three languages and the chart hover tooltips are kept.
+- Removed the custom accent colour picker. The app now uses a fixed classic blue and no longer follows the Windows theme colour.
+- Unified the accent across the navigation indicator, tabs, dropdowns, toggles, and dialog buttons; fixed dialog buttons still showing the Windows purple.
+- Replaced TabView with simple text tabs (no Ctrl+F4 tooltip), widened the trend chart bars, and restored the default WinUI selection styling.
+- Focus: the page now fills the window width, and the duration dropdown became a row of preset buttons.
+- The Terms of Use and Privacy Policy are unchanged, so upgrading does not ask you to accept them again.
 
 ## v0.9.2
 
@@ -101,7 +110,7 @@ dist\ui\screentime-rs.exe
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.9.2-Setup.exe
+installer-output\ScreenTimeRS-v0.9.3-Setup.exe
 ```
 
 ## Usage-data backup
@@ -146,5 +155,5 @@ See [LICENSE](LICENSE).
 
 ## Version
 
-**v0.9.2**
+**v0.9.3**
 

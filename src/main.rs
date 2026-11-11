@@ -1617,7 +1617,7 @@ fn handle_cli(args: &[String]) -> Result<bool> {
         Some("--resume") => { set_paused(false); request_refresh(); Ok(true) }
         Some("--backup") => { let db=Database::new()?; println!("{}", db.backup_now()?.display()); Ok(true) }
         Some("--data-dir") => { if let Some(p)=data_dir(){ println!("{}",p.display()); } Ok(true) }
-        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.9.2\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
+        Some("--diagnostics") => { let db=Database::new()?; let today=Local::now().date_naive(); let (active,longest)=db.session_stats_today(today)?; let records=db.export_records()?.len(); let size=std::fs::metadata(&db.path).map(|m|m.len()).unwrap_or(0); println!("{{\"version\":\"0.9.3\",\"data_dir\":\"{}\",\"database_bytes\":{},\"records\":{},\"active_session_seconds_today\":{},\"longest_session_seconds_today\":{},\"paused\":{}}}", data_dir().map(|p|p.display().to_string()).unwrap_or_default().replace('\\', "/"),size,records,active,longest,is_paused()); Ok(true) }
         _ => Ok(false),
     }
 }
