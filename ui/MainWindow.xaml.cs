@@ -59,6 +59,8 @@ public sealed partial class MainWindow : Window
     private UIElement? _focusContent;
     private readonly FocusHistoryPage _focusHistoryPage;
     private readonly SettingsPage _settingsPage;
+    private readonly UsageShellPage _usageShell;
+    private readonly FocusShellPage _focusShell;
 
     private LanguageMode UiLanguage => LanguageResolver.Resolve(_languageMode);
 
@@ -113,9 +115,10 @@ public sealed partial class MainWindow : Window
         _overviewPage = new OverviewPage();
         _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
         _statsPage = new StatsPage(LoadStatsPeriodAsync);
-        _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, ReturnToFocusPage, RefreshRecentFocusHistory);
+        _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, () => { }, RefreshRecentFocusHistory);
         _focusHistoryPage.ApplyAccent(accent);
         _focusHistoryPage.ApplyLanguage(UiLanguage);
+        _focusHistoryPage.SetEmbedded(true);
         _settingsPage = new SettingsPage(_themeMode, _languageMode, accent);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
         _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
@@ -126,6 +129,8 @@ public sealed partial class MainWindow : Window
         _settingsPage.PauseRequested += SettingsPage_PauseRequested;
         _settingsPage.BackupRequested += SettingsPage_BackupRequested;
         _settingsPage.DiagnosticsRequested += SettingsPage_DiagnosticsRequested;
+        _usageShell = new UsageShellPage(_statsPage, _appsPage);
+        _focusShell = new FocusShellPage(GetFocusContent, _focusHistoryPage);
         ApplyAccent(accent);
 
         ApplyLanguage(_languageMode);
@@ -337,10 +342,8 @@ public sealed partial class MainWindow : Window
 
 
         _overviewPage?.ApplyAccent(color);
-        _appsPage?.ApplyAccent(color);
-        _statsPage?.ApplyAccent(color);
-        _focusPage?.ApplyAccent(color);
-        _focusHistoryPage?.ApplyAccent(color);
+        _usageShell?.ApplyAccent(color);
+        _focusShell?.ApplyAccent(color);
         _settingsPage?.ApplyAccent(color);
     }
 
@@ -358,8 +361,7 @@ public sealed partial class MainWindow : Window
 
         SetNavigationResources(Nav.Resources, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavOverview, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavApps, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavStats, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
+        ApplyNavigationItemResources(NavUsage, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavFocus, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
         ApplyNavigationItemResources(NavSettings, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
 
@@ -379,10 +381,10 @@ public sealed partial class MainWindow : Window
                 {
                     Nav.MenuItems.Clear();
                     Nav.MenuItems.Add(NavOverview);
-                    Nav.MenuItems.Add(NavApps);
-                    Nav.MenuItems.Add(NavStats);
+                    Nav.MenuItems.Add(NavUsage);
                     Nav.MenuItems.Add(NavFocus);
-                    Nav.MenuItems.Add(NavSettings);
+                    Nav.FooterMenuItems.Clear();
+                    Nav.FooterMenuItems.Add(NavSettings);
                     Nav.OpenPaneLength = _savedPaneLength;
                     if (!string.IsNullOrWhiteSpace(selectedTag))
                     {
@@ -392,6 +394,17 @@ public sealed partial class MainWindow : Window
                             {
                                 Nav.SelectedItem = nvi;
                                 break;
+                            }
+                        }
+                        if ((Nav.SelectedItem as NavigationViewItem)?.Tag?.ToString() != selectedTag)
+                        {
+                            foreach (var item in Nav.FooterMenuItems)
+                            {
+                                if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
+                                {
+                                    Nav.SelectedItem = nvi;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -470,31 +483,26 @@ public sealed partial class MainWindow : Window
         {
             case LanguageMode.English:
                 NavOverview.Content = "Overview";
-                NavApps.Content = "App usage";
-                NavStats.Content = "Statistics";
+                NavUsage.Content = "Usage";
                 NavFocus.Content = "Focus";
                 NavSettings.Content = "Settings";
                 break;
             case LanguageMode.TraditionalChinese:
                 NavOverview.Content = "概覽";
-                NavApps.Content = "應用程式使用時間";
-                NavStats.Content = "統計";
+                NavUsage.Content = "使用";
                 NavFocus.Content = "專注";
                 NavSettings.Content = "設定";
                 break;
             default:
                 NavOverview.Content = "概览";
-                NavApps.Content = "应用使用时间";
-                NavStats.Content = "统计";
+                NavUsage.Content = "使用";
                 NavFocus.Content = "专注";
                 NavSettings.Content = "设置";
                 break;
         }
         _overviewPage.ApplyLanguage(effective);
-        _appsPage.ApplyLanguage(effective);
-        _statsPage.ApplyLanguage(effective);
-        _focusPage?.ApplyLanguage(effective);
-        _focusHistoryPage.ApplyLanguage(effective);
+        _usageShell.ApplyLanguage(effective);
+        _focusShell.ApplyLanguage(effective);
         _settingsPage.SetLanguage(language, effective);
     }
 
@@ -762,12 +770,17 @@ public sealed partial class MainWindow : Window
         ContentFrame.Content = item.Tag?.ToString() switch
         {
             "overview" => _overviewPage,
-            "apps" => _appsPage,
-            "stats" => _statsPage,
-            "focus" => GetFocusContent(),
+            "usage" => _usageShell,
+            "focus" => ActivateFocusShell(),
             "settings" => _settingsPage,
             _ => _overviewPage
         };
+    }
+
+    private UIElement ActivateFocusShell()
+    {
+        _focusShell.Activate();
+        return _focusShell;
     }
 
     private void UpdatePages(Snapshot s)
@@ -804,10 +817,9 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // Full focus history is a secondary page opened from the Focus page,
-            // not a top-level navigation item. Keep Focus selected in the shell.
-            ContentFrame.Content = _focusHistoryPage;
-            _focusHistoryPage.Refresh();
+            // History is a tab inside the focus shell now; keep Focus selected in
+            // the navigation pane and switch the shell tab instead of the frame.
+            _focusShell.SelectHistory();
         }
         catch (Exception ex)
         {
@@ -827,34 +839,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ReturnToFocusPage()
-    {
-        try
-        {
-            ContentFrame.Content = GetFocusContent();
-            _focusPage?.RefreshHistory();
-            UpdateVisiblePage();
-        }
-        catch (Exception ex)
-        {
-            LogFocusUiError(ex);
-        }
-    }
-
     private void UpdateVisiblePage()
     {
         switch (Nav.SelectedItem is NavigationViewItem item ? item.Tag?.ToString() : "overview")
         {
-            case "apps":
-                _appsPage.UpdateSnapshot(_latestSnapshot);
-                break;
-            case "stats":
-                _statsPage.UpdateSnapshot(_latestSnapshot);
+            case "usage":
+                _usageShell.UpdateSnapshot(_latestSnapshot);
                 break;
             case "focus":
                 try
                 {
-                    _focusPage?.UpdateSnapshot(_latestSnapshot);
+                    _focusShell.UpdateSnapshot(_latestSnapshot);
                 }
                 catch (Exception ex)
                 {

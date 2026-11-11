@@ -28,11 +28,12 @@
                             SelectionChanged="Nav_SelectionChanged" Loaded="Nav_Loaded" PaneDisplayMode="Left">
                 <NavigationView.MenuItems>
                     <NavigationViewItem x:Name="NavOverview" Content="概览" Tag="overview" Icon="Home"/>
-                    <NavigationViewItem x:Name="NavApps" Content="应用使用时间" Tag="apps" Icon="AllApps"/>
-                    <NavigationViewItem x:Name="NavStats" Content="统计" Tag="stats" Icon="Library"/>
+                    <NavigationViewItem x:Name="NavUsage" Content="使用" Tag="usage" Icon="AllApps"/>
                     <NavigationViewItem x:Name="NavFocus" Content="专注" Tag="focus" Icon="Play"/>
-                    <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
                 </NavigationView.MenuItems>
+                <NavigationView.FooterMenuItems>
+                    <NavigationViewItem x:Name="NavSettings" Content="设置" Tag="settings" Icon="Setting"/>
+                </NavigationView.FooterMenuItems>
                 <Frame x:Name="ContentFrame"/>
             </NavigationView>
 

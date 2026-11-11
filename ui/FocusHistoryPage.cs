@@ -163,6 +163,12 @@ public sealed class FocusHistoryPage : Page
 
     private Grid? _headerGrid;
 
+    /// <summary>Hides the back button when history is embedded as a tab.</summary>
+    public void SetEmbedded(bool embedded)
+    {
+        _back.Visibility = embedded ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public void ApplyAccent(Color color)
     {
         _accent = color;
