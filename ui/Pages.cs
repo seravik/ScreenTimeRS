@@ -367,7 +367,7 @@ public sealed class OverviewPage : Page
         {
             status.Severity = InfoBarSeverity.Warning;
             status.Title = _language == LanguageMode.English ? "Recording paused" : _language == LanguageMode.TraditionalChinese ? "已暫停記錄" : "已暂停记录";
-            status.Message = _language == LanguageMode.English ? "Resume recording from the Overview header or Advanced settings." : _language == LanguageMode.TraditionalChinese ? "可在概覽頂部或進階設定中繼續記錄。" : "可在概览顶部或高级设置中继续记录。";
+            status.Message = _language == LanguageMode.English ? "Resume recording from the Overview header or Settings → Recording." : _language == LanguageMode.TraditionalChinese ? "可在概覽頂部或「設定 → 記錄狀態」中繼續記錄。" : "可在概览顶部或「设置 → 记录状态」中继续记录。";
         }
         else if (s.locked)
         {
@@ -1782,9 +1782,9 @@ public sealed class SettingsPage : Page
     readonly TextBlock themeModeLabel, languageModeLabel, legalHint, dataCardTitle;
     readonly TextBlock paletteTitle, customColorTitle, accentHint, dataHint;
     readonly TextBlock dataLocationTitle, dataLocationText, dataLocationHint;
+    readonly TextBlock monitoringTitle, monitoringHint, dangerTitle, dangerHint, diagnosticsTitle, diagnosticsHint;
     readonly Button exportDataButton, importDataButton, deleteAllDataButton, openDataFolderButton, pauseButton, backupButton, diagnosticsButton;
     readonly Expander themeColorsExpander;
-    readonly Border dataCard, legalCard, advancedCard;
     readonly StackPanel themeContent;
     readonly Grid colorPickerHost;
     readonly Border colorSpectrumInputSurface;
@@ -1823,7 +1823,7 @@ public sealed class SettingsPage : Page
             Spacing = 24,
             Padding = new Thickness(28),
             MaxWidth = 860,
-            HorizontalAlignment = HorizontalAlignment.Left
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
 
         pageTitle = new TextBlock
@@ -2008,6 +2008,24 @@ public sealed class SettingsPage : Page
         ApplyComboBoxAccent(language, _accentColor);
         p.Children.Add(language);
 
+        // Recording state belongs to General: it changes how the app runs, not where data lives.
+        monitoringTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        monitoringHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        pauseButton.Click += (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty);
+        var monitoringActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        monitoringActions.Children.Add(pauseButton);
+        var monitoringContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        monitoringContent.Children.Add(monitoringTitle);
+        monitoringContent.Children.Add(monitoringHint);
+        monitoringContent.Children.Add(monitoringActions);
+        p.Children.Add(CreateSettingsCard(monitoringContent));
+
         // Data & Privacy
         dataSectionTitle = new TextBlock
         {
@@ -2033,7 +2051,6 @@ public sealed class SettingsPage : Page
         };
         dataButtons.Children.Add(exportDataButton);
         dataButtons.Children.Add(importDataButton);
-        dataButtons.Children.Add(deleteAllDataButton);
         var dataContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
         dataCardTitle = new TextBlock
         {
@@ -2043,8 +2060,23 @@ public sealed class SettingsPage : Page
         dataContent.Children.Add(dataCardTitle);
         dataContent.Children.Add(dataHint);
         dataContent.Children.Add(dataButtons);
-        dataCard = CreateSettingsCard(dataContent);
-        p.Children.Add(dataCard);
+        p.Children.Add(CreateSettingsCard(dataContent));
+
+        // Destructive actions get their own visually separated card.
+        dangerTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        dangerHint = new TextBlock { FontSize = 12, Opacity = .72, TextWrapping = TextWrapping.Wrap };
+        var dangerActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        dangerActions.Children.Add(deleteAllDataButton);
+        var dangerContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        dangerContent.Children.Add(dangerTitle);
+        dangerContent.Children.Add(dangerHint);
+        dangerContent.Children.Add(dangerActions);
+        p.Children.Add(CreateDangerCard(dangerContent));
 
         // Data location and maintenance stay in the data section.
         dataLocationTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
@@ -2058,21 +2090,17 @@ public sealed class SettingsPage : Page
         dataLocationHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
         openDataFolderButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         openDataFolderButton.Click += (_, _) => OpenDataFolder();
-        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        pauseButton.Click += (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty);
         backupButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         backupButton.Click += (_, _) => BackupRequested?.Invoke(this, EventArgs.Empty);
         var maintenanceButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
         maintenanceButtons.Children.Add(openDataFolderButton);
-        maintenanceButtons.Children.Add(pauseButton);
         maintenanceButtons.Children.Add(backupButton);
-        var advancedContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
-        advancedContent.Children.Add(dataLocationTitle);
-        advancedContent.Children.Add(dataLocationText);
-        advancedContent.Children.Add(dataLocationHint);
-        advancedContent.Children.Add(maintenanceButtons);
-        advancedCard = CreateSettingsCard(advancedContent);
-        p.Children.Add(advancedCard);
+        var locationContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        locationContent.Children.Add(dataLocationTitle);
+        locationContent.Children.Add(dataLocationText);
+        locationContent.Children.Add(dataLocationHint);
+        locationContent.Children.Add(maintenanceButtons);
+        p.Children.Add(CreateSettingsCard(locationContent));
 
         // About: version, diagnostics, then the legal notices.
         diagnosticsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
@@ -2094,6 +2122,9 @@ public sealed class SettingsPage : Page
             Margin = new Thickness(4, 0, 0, 0)
         };
 
+        diagnosticsTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        diagnosticsHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+
         termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         termsButton.Click += TermsButton_Click;
         var legalContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
@@ -2111,13 +2142,18 @@ public sealed class SettingsPage : Page
         };
         legalContent.Children.Add(legalHint);
         legalContent.Children.Add(termsButton);
-        legalCard = CreateSettingsCard(legalContent);
 
-        var aboutContent = new StackPanel { Spacing = 10, Padding = new Thickness(14) };
+        var aboutContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
         aboutContent.Children.Add(aboutText);
-        aboutContent.Children.Add(diagnosticsButton);
         p.Children.Add(CreateSettingsCard(aboutContent));
-        p.Children.Add(legalCard);
+
+        var diagnosticsContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        diagnosticsContent.Children.Add(diagnosticsTitle);
+        diagnosticsContent.Children.Add(diagnosticsHint);
+        diagnosticsContent.Children.Add(diagnosticsButton);
+        p.Children.Add(CreateSettingsCard(diagnosticsContent));
+
+        p.Children.Add(CreateSettingsCard(legalContent));
 
         Content = new ScrollViewer
         {
@@ -2137,6 +2173,16 @@ public sealed class SettingsPage : Page
         BorderBrush = new SolidColorBrush(UIColor.FromArgb(55, 128, 128, 128)),
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(8),
+        Child = content,
+        HorizontalAlignment = HorizontalAlignment.Stretch
+    };
+
+    private static Border CreateDangerCard(UIElement content) => new()
+    {
+        BorderBrush = new SolidColorBrush(UIColor.FromArgb(110, 196, 43, 28)),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(8),
+        Background = new SolidColorBrush(UIColor.FromArgb(12, 196, 43, 28)),
         Child = content,
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
@@ -2679,6 +2725,21 @@ public sealed class SettingsPage : Page
             : hant ? "匯出或匯入本機使用歷史記錄。匯入取代資料前會自動建立本機安全備份。"
             : "导出或导入本机使用历史记录。导入替换数据前会自动创建本地安全备份。";
         dataCardTitle.Text = en ? "Data management" : hant ? "資料管理" : "数据管理";
+        monitoringTitle.Text = en ? "Recording" : hant ? "記錄狀態" : "记录状态";
+        monitoringHint.Text = en
+            ? "Pause the collector to stop accumulating usage time. The Overview header offers the same control."
+            : hant ? "暫停後不再累計使用時間，概覽頂部提供相同的控制項。"
+            : "暂停后不再累计使用时间，概览顶部提供同样的控制。";
+        dangerTitle.Text = en ? "Danger zone" : hant ? "危險操作" : "危险操作";
+        dangerHint.Text = en
+            ? "Deleting all data permanently removes local usage records and focus history. This cannot be undone."
+            : hant ? "刪除所有資料會永久移除本機使用記錄與專注歷史，且無法復原。"
+            : "删除全部数据会永久移除本机使用记录与专注历史，且无法撤销。";
+        diagnosticsTitle.Text = en ? "Diagnostics" : hant ? "診斷" : "诊断";
+        diagnosticsHint.Text = en
+            ? "Inspect database size, record count, and collector state when something looks wrong."
+            : hant ? "檢查資料庫大小、記錄數量與收集器狀態，用於疑難排解。"
+            : "检查数据库大小、记录数量与采集状态，用于排查问题。";
         exportDataButton.Content = en ? "Export data" : hant ? "匯出資料" : "导出数据";
         importDataButton.Content = en ? "Import data" : hant ? "匯入資料" : "导入数据";
         deleteAllDataButton.Content = en ? "Delete all data" : hant ? "刪除所有資料" : "删除全部数据";
@@ -2696,12 +2757,12 @@ public sealed class SettingsPage : Page
         openDataFolderButton.Content = en ? "Open data folder" : hant ? "開啟資料夾" : "打开数据文件夹";
         pauseButton.Content = ""; // state is applied by SetMonitoringState
         backupButton.Content = en ? "Create backup" : hant ? "建立備份" : "创建备份";
-        diagnosticsButton.Content = en ? "Diagnostics" : hant ? "診斷" : "诊断";
+        diagnosticsButton.Content = en ? "View diagnostics" : hant ? "檢視診斷" : "查看诊断";
         SetMonitoringState(_monitorPaused);
         aboutText.Text = en
             ? "ScreenTime RS · Version 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI"
             : hant ? "ScreenTime RS · 版本 0.9.2 · Rust 監控核心 + WinUI 3 / Fluent UI"
-            : "ScreenTime RS · 版本 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI";
+            : "ScreenTime RS · 版本 0.9.2 · Rust 监控核心 + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
