@@ -643,7 +643,6 @@ public sealed class AppsPage : Page
         period.Items.Add("指定日期");
         period.SelectedIndex = 0;
         period.SelectionChanged += Period_SelectionChanged;
-        ApplyComboBoxAccent(period, _accentColor);
         Grid.SetColumn(period, 0);
         Grid.SetRow(period, 0);
         filters.Children.Add(period);
@@ -854,7 +853,6 @@ public sealed class AppsPage : Page
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
-        ApplyComboBoxAccent(period, color);
         foreach (var row in rows.Values)
             row.ApplyAccent(color);
     }
@@ -1141,19 +1139,6 @@ public sealed class AppsPage : Page
         return raw;
     }
 
-    static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
-    {
-        var accent = new SolidColorBrush(color);
-        combo.Resources["ComboBoxItemPillFillBrush"] = accent;
-        combo.Resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(UIColor.FromArgb(34, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(UIColor.FromArgb(72, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemForegroundSelected"] = accent;
-        combo.Resources["ComboBoxItemForegroundSelectedPointerOver"] = accent;
-        combo.Resources["ComboBoxSelectedBackground"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
-        combo.Resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
-    }
 
     static string Key(AppStat a) => string.IsNullOrWhiteSpace(a.exe_path) ? a.name : a.exe_path;
 
@@ -1500,7 +1485,6 @@ public sealed class StatsPage : Page
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
-        ApplyComboBoxAccent(period, color);
         var accent = new SolidColorBrush(color);
         foreach (var item in trend)
         {
@@ -1755,19 +1739,6 @@ public sealed class StatsPage : Page
         g.Children.Add(b);
     }
 
-    static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
-    {
-        var accent = new SolidColorBrush(color);
-        combo.Resources["ComboBoxItemPillFillBrush"] = accent;
-        combo.Resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(UIColor.FromArgb(34, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(UIColor.FromArgb(72, color.R, color.G, color.B));
-        combo.Resources["ComboBoxItemForegroundSelected"] = accent;
-        combo.Resources["ComboBoxItemForegroundSelectedPointerOver"] = accent;
-        combo.Resources["ComboBoxSelectedBackground"] = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
-        combo.Resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(UIColor.FromArgb(56, color.R, color.G, color.B));
-    }
 }
 
 public sealed class SettingsPage : Page
@@ -1888,7 +1859,6 @@ public sealed class SettingsPage : Page
         generalPanel.Children.Add(themeModeLabel);
         theme = new ComboBox { Width = 260 };
         theme.SelectionChanged += Theme_SelectionChanged;
-        ApplyComboBoxAccent(theme, _accentColor);
         generalPanel.Children.Add(theme);
 
         // Language
@@ -1908,7 +1878,6 @@ public sealed class SettingsPage : Page
         generalPanel.Children.Add(languageModeLabel);
         language = new ComboBox { Width = 260 };
         language.SelectionChanged += Language_SelectionChanged;
-        ApplyComboBoxAccent(language, _accentColor);
         generalPanel.Children.Add(language);
 
         // Recording state belongs to General: it changes how the app runs, not where data lives.
@@ -2256,8 +2225,6 @@ public sealed class SettingsPage : Page
     {
         _accentColor = color;
         ApplyStartupAccent(color);
-        ApplyComboBoxAccent(theme, color);
-        ApplyComboBoxAccent(language, color);
         UpdateChipVisuals(_activeSection);
     }
 
@@ -2291,19 +2258,6 @@ public sealed class SettingsPage : Page
         ApplyStartupAccent(_accentColor);
     }
 
-    static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
-    {
-        var accent = new SolidColorBrush(color);
-        combo.Resources["ComboBoxItemPillFillBrush"] = accent;
-        combo.Resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(ColorWithAlpha(color, 40));
-        combo.Resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(ColorWithAlpha(color, 34));
-        combo.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(ColorWithAlpha(color, 56));
-        combo.Resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(ColorWithAlpha(color, 72));
-        combo.Resources["ComboBoxItemForegroundSelected"] = accent;
-        combo.Resources["ComboBoxItemForegroundSelectedPointerOver"] = accent;
-        combo.Resources["ComboBoxSelectedBackground"] = new SolidColorBrush(ColorWithAlpha(color, 40));
-        combo.Resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(ColorWithAlpha(color, 56));
-    }
 
     static UIColor ColorWithAlpha(UIColor color, byte alpha) =>
         UIColor.FromArgb(alpha, color.R, color.G, color.B);

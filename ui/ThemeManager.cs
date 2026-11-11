@@ -38,11 +38,6 @@ public static class ThemeManager
         var accentDark = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.Black, .18));
 
         resources["SystemControlHighlightAccentBrush"] = accentBrush;
-        resources["SystemControlHighlightListAccentVeryHighBrush"] = new SolidColorBrush(Color.FromArgb(230, accent.R, accent.G, accent.B));
-        resources["SystemControlHighlightListAccentMediumLowBrush"] = new SolidColorBrush(Color.FromArgb(191, accent.R, accent.G, accent.B));
-        resources["SystemControlHighlightListAccentLowBrush"] = new SolidColorBrush(Color.FromArgb(54, accent.R, accent.G, accent.B));
-        resources["SystemControlHighlightListAccentMediumBrush"] = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B));
-        resources["SystemControlHighlightListAccentHighBrush"] = new SolidColorBrush(Color.FromArgb(145, accent.R, accent.G, accent.B));
 
         resources["AccentFillColorSelectedTextBackgroundBrush"] = accentBrush;
         resources["AccentFillColorDefaultBrush"] = accentMid;
@@ -51,10 +46,6 @@ public static class ThemeManager
         resources["AccentTextFillColorPrimaryBrush"] = accentDark;
         resources["AccentTextFillColorSecondaryBrush"] = accentDark;
         resources["AccentTextFillColorTertiaryBrush"] = accentMid;
-        resources["NavigationViewSelectionIndicatorForeground"] = accentBrush;
-        resources["NavigationViewItemBackgroundSelected"] = new SolidColorBrush(Color.FromArgb(36, accent.R, accent.G, accent.B));
-        resources["NavigationViewItemForegroundSelected"] = accentBrush;
-        resources["NavigationViewItemIconForegroundSelected"] = accentBrush;
         resources["CheckBoxCheckBackgroundFillOn"] = accentBrush;
         resources["CheckBoxCheckBackgroundFillOnPointerOver"] = accentLight;
         resources["CheckBoxCheckBackgroundFillOnPressed"] = accentDark;
@@ -65,15 +56,6 @@ public static class ThemeManager
         resources["ProgressBarIndicatorForegroundPointerOver"] = accentBrush;
         resources["ProgressBarTrackFill"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
 
-        resources["ComboBoxItemPillFillBrush"] = accentBrush;
-        resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
-        resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(Color.FromArgb(34, accent.R, accent.G, accent.B));
-        resources["ComboBoxItemBackgroundSelectedPointerOver"] = new SolidColorBrush(Color.FromArgb(56, accent.R, accent.G, accent.B));
-        resources["ComboBoxItemBackgroundSelectedPressed"] = new SolidColorBrush(Color.FromArgb(72, accent.R, accent.G, accent.B));
-        resources["ComboBoxItemForegroundSelected"] = accentDark;
-        resources["ComboBoxItemForegroundSelectedPointerOver"] = accentDark;
-        resources["ComboBoxSelectedBackground"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
-        resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(Color.FromArgb(56, accent.R, accent.G, accent.B));
     }
 
     static Color Mix(Color a, Color b, double amount)

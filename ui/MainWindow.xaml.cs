@@ -335,114 +335,11 @@ public sealed partial class MainWindow : Window
     private void ApplyAccent(Color color)
     {
         ThemeManager.ApplyAccent(color);
-        ApplyNavigationAccent(color);
-
 
         _overviewPage?.ApplyAccent(color);
         _usageShell?.ApplyAccent(color);
         _focusShell?.ApplyAccent(color);
         _settingsPage?.ApplyAccent(color);
-    }
-
-    private bool _refreshingNavigationTheme;
-
-    private void ApplyNavigationAccent(Color color)
-    {
-        var accentBrush = new SolidColorBrush(color);
-        var selectedBackground = new SolidColorBrush(Color.FromArgb(36, color.R, color.G, color.B));
-        var hoverBackground = new SolidColorBrush(Color.FromArgb(52, color.R, color.G, color.B));
-        var pressedBackground = new SolidColorBrush(Color.FromArgb(72, color.R, color.G, color.B));
-        var lowBrush = new SolidColorBrush(Color.FromArgb(54, color.R, color.G, color.B));
-        var mediumBrush = new SolidColorBrush(Color.FromArgb(90, color.R, color.G, color.B));
-        var highBrush = new SolidColorBrush(Color.FromArgb(145, color.R, color.G, color.B));
-
-        SetNavigationResources(Nav.Resources, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavOverview, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavUsage, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavFocus, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-        ApplyNavigationItemResources(NavSettings, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-
-        // NavigationViewItem keeps its materialized template/resources. Rebuilding
-        // the four existing items is the reliable way to make the selection
-        // indicator and selected foreground pick up the new accent immediately,
-        // without closing the window and without toggling pane state.
-        if (Nav.XamlRoot != null && !_refreshingNavigationTheme)
-        {
-            var selectedTag = (Nav.SelectedItem as NavigationViewItem)?.Tag?.ToString();
-            var paneOpen = Nav.IsPaneOpen;
-            _savedPaneLength = Nav.OpenPaneLength;
-            _refreshingNavigationTheme = true;
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                try
-                {
-                    Nav.MenuItems.Clear();
-                    Nav.MenuItems.Add(NavOverview);
-                    Nav.MenuItems.Add(NavUsage);
-                    Nav.MenuItems.Add(NavFocus);
-                    Nav.FooterMenuItems.Clear();
-                    Nav.FooterMenuItems.Add(NavSettings);
-                    Nav.OpenPaneLength = _savedPaneLength;
-                    if (!string.IsNullOrWhiteSpace(selectedTag))
-                    {
-                        NavigationViewItem? match = null;
-                        foreach (var item in Nav.MenuItems)
-                        {
-                            if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
-                            {
-                                match = nvi;
-                                break;
-                            }
-                        }
-                        if (match is null)
-                        {
-                            foreach (var item in Nav.FooterMenuItems)
-                            {
-                                if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
-                                {
-                                    match = nvi;
-                                    break;
-                                }
-                            }
-                        }
-                        if (match is not null)
-                            Nav.SelectedItem = match;
-                    }
-                    Nav.IsPaneOpen = paneOpen;
-                    Nav.UpdateLayout();
-                }
-                finally
-                {
-                    _refreshingNavigationTheme = false;
-                }
-            });
-        }
-    }
-
-    private static void ApplyNavigationItemResources(
-        NavigationViewItem item,
-        SolidColorBrush accentBrush,
-        SolidColorBrush selectedBackground,
-        SolidColorBrush hoverBackground,
-        SolidColorBrush pressedBackground,
-        SolidColorBrush lowBrush,
-        SolidColorBrush mediumBrush,
-        SolidColorBrush highBrush)
-    {
-        SetNavigationResources(item.Resources, accentBrush, selectedBackground, hoverBackground, pressedBackground, lowBrush, mediumBrush, highBrush);
-    }
-
-    private static void SetNavigationResources(ResourceDictionary resources, SolidColorBrush accentBrush, SolidColorBrush selectedBackground, SolidColorBrush hoverBackground, SolidColorBrush pressedBackground, SolidColorBrush lowBrush, SolidColorBrush mediumBrush, SolidColorBrush highBrush)
-    {
-        resources["NavigationViewSelectionIndicatorForeground"] = accentBrush;
-        resources["NavigationViewItemForegroundSelected"] = accentBrush;
-        resources["NavigationViewItemIconForegroundSelected"] = accentBrush;
-        resources["NavigationViewItemBackgroundSelected"] = selectedBackground;
-        resources["NavigationViewItemBackgroundSelectedPointerOver"] = hoverBackground;
-        resources["NavigationViewItemBackgroundSelectedPressed"] = pressedBackground;
-        resources["SystemControlHighlightListAccentLowBrush"] = lowBrush;
-        resources["SystemControlHighlightListAccentMediumBrush"] = mediumBrush;
-        resources["SystemControlHighlightListAccentHighBrush"] = highBrush;
     }
 
     private void SettingsPage_LanguageChanged(object? sender, LanguageMode language)
@@ -983,7 +880,6 @@ public sealed partial class MainWindow : Window
 
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (_refreshingNavigationTheme) return;
         try
         {
             ShowSelectedPage();
