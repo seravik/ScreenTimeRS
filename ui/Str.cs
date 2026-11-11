@@ -164,6 +164,218 @@ internal static class Str
         };
     }
 
+    internal static class Settings
+    {
+        public static string Title(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Settings",
+            LanguageMode.TraditionalChinese => "設定",
+            _ => "设置"
+        };
+
+        public static string General(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "General",
+            LanguageMode.TraditionalChinese => "一般",
+            _ => "常规"
+        };
+
+        public static string Appearance(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Appearance",
+            LanguageMode.TraditionalChinese => "外觀",
+            _ => "外观"
+        };
+
+        public static string Theme(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Theme",
+            LanguageMode.TraditionalChinese => "主題",
+            _ => "主题"
+        };
+
+        public static string ThemeOption(int index, LanguageMode l) => (index, l) switch
+        {
+            (0, LanguageMode.English) => "Follow system",
+            (0, LanguageMode.TraditionalChinese) => "跟隨系統",
+            (0, _) => "跟随系统",
+            (1, LanguageMode.English) => "Light",
+            (1, LanguageMode.TraditionalChinese) => "淺色",
+            (1, _) => "浅色",
+            (_, LanguageMode.English) => "Dark",
+            (_, LanguageMode.TraditionalChinese) => "深色",
+            (_, _) => "深色"
+        };
+
+        public static string Startup(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Start in the background when I sign in",
+            LanguageMode.TraditionalChinese => "登入 Windows 後在背景啟動",
+            _ => "登录 Windows 后在后台启动"
+        };
+
+        public static string Language(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Language",
+            LanguageMode.TraditionalChinese => "語言",
+            _ => "语言"
+        };
+
+        public static string DisplayLanguage(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Display language",
+            LanguageMode.TraditionalChinese => "顯示語言",
+            _ => "显示语言"
+        };
+
+        public static string Recording(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Recording",
+            LanguageMode.TraditionalChinese => "記錄狀態",
+            _ => "记录状态"
+        };
+
+        public static string RecordingHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Pausing stops new usage from being counted. The overview header offers the same control.",
+            LanguageMode.TraditionalChinese => "暫停後不再累計新的使用時間，概覽頂部提供相同的控制項。",
+            _ => "暂停后不再累计新的使用时间，概览顶部提供同样的控制。"
+        };
+
+        public static string Data(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Data",
+            LanguageMode.TraditionalChinese => "資料",
+            _ => "数据"
+        };
+
+        public static string DataHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Export or import local usage history. A local safety copy is created before an import replaces anything.",
+            LanguageMode.TraditionalChinese => "匯出或匯入本機使用歷史，匯入前會自動建立本機安全備份。",
+            _ => "导出或导入本机使用历史，导入前会自动创建本地安全备份。"
+        };
+
+        public static string Export(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Export data",
+            LanguageMode.TraditionalChinese => "匯出資料",
+            _ => "导出数据"
+        };
+
+        public static string Import(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Import data",
+            LanguageMode.TraditionalChinese => "匯入資料",
+            _ => "导入数据"
+        };
+
+        public static string Danger(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Danger zone",
+            LanguageMode.TraditionalChinese => "危險操作",
+            _ => "危险操作"
+        };
+
+        public static string DangerHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Deleting removes local usage records and focus history for good. It cannot be undone.",
+            LanguageMode.TraditionalChinese => "刪除會永久移除本機使用記錄與專注歷史，且無法復原。",
+            _ => "删除会永久移除本机使用记录与专注历史，且无法撤销。"
+        };
+
+        public static string DeleteAll(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Delete all data",
+            LanguageMode.TraditionalChinese => "刪除所有資料",
+            _ => "删除全部数据"
+        };
+
+        public static string Location(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Data location",
+            LanguageMode.TraditionalChinese => "資料位置",
+            _ => "数据位置"
+        };
+
+        public static string LocationHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Records, snapshots and automatic import backups live here.",
+            LanguageMode.TraditionalChinese => "使用記錄、快照與匯入前的自動備份會存放在此。",
+            _ => "使用记录、快照与导入前的自动备份存放在这里。"
+        };
+
+        public static string OpenFolder(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Open folder",
+            LanguageMode.TraditionalChinese => "開啟資料夾",
+            _ => "打开文件夹"
+        };
+
+        public static string Backup(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Create backup",
+            LanguageMode.TraditionalChinese => "建立備份",
+            _ => "创建备份"
+        };
+
+        public static string About(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "About",
+            LanguageMode.TraditionalChinese => "關於",
+            _ => "关于"
+        };
+
+        public static string Version(string version, LanguageMode l) => l switch
+        {
+            LanguageMode.English => $"ScreenTime RS {version} · Rust core + WinUI 3",
+            LanguageMode.TraditionalChinese => $"ScreenTime RS {version} · Rust 核心 + WinUI 3",
+            _ => $"ScreenTime RS {version} · Rust 核心 + WinUI 3"
+        };
+
+        public static string Diagnostics(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Diagnostics",
+            LanguageMode.TraditionalChinese => "診斷",
+            _ => "诊断"
+        };
+
+        public static string DiagnosticsHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Check database size, record count and collector state.",
+            LanguageMode.TraditionalChinese => "檢查資料庫大小、記錄數量與收集器狀態。",
+            _ => "检查数据库大小、记录数量与采集状态。"
+        };
+
+        public static string ViewDiagnostics(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "View diagnostics",
+            LanguageMode.TraditionalChinese => "檢視診斷",
+            _ => "查看诊断"
+        };
+
+        public static string Terms(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Terms & privacy",
+            LanguageMode.TraditionalChinese => "使用條款與隱私",
+            _ => "使用条款与隐私"
+        };
+
+        public static string TermsHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "See how ScreenTime RS records, stores and handles local usage data.",
+            LanguageMode.TraditionalChinese => "查看 ScreenTime RS 如何記錄、儲存與處理本機使用資料。",
+            _ => "查看 ScreenTime RS 如何记录、存储和处理本机使用数据。"
+        };
+
+        public static string ViewTerms(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "View terms and privacy policy",
+            LanguageMode.TraditionalChinese => "檢視使用條款與隱私權政策",
+            _ => "查看使用条款与隐私政策"
+        };
+    }
+
     internal static class Overview
     {
         public static string Title(LanguageMode l) => l switch

@@ -402,7 +402,7 @@ public sealed class FocusHistoryPage : Page
     {
         Padding = new Thickness(20),
         CornerRadius = new CornerRadius(12),
-        BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128)),
         BorderThickness = new Thickness(1)
     };
 

@@ -116,7 +116,7 @@ public sealed class FocusPage : Page
                 panel.Width = available;
         };
 
-        _title.FontSize = 30;
+        _title.FontSize = Ui.PageTitleSize;
         _title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         panel.Children.Add(_title);
         _subtitle.Opacity = .68;
@@ -278,8 +278,9 @@ public sealed class FocusPage : Page
         {
             Padding = new Thickness(20),
             CornerRadius = new CornerRadius(12),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
-            BorderThickness = new Thickness(1)
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128)),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
     }
 
