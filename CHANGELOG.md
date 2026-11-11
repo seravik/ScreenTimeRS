@@ -1,29 +1,29 @@
 ## v0.9.2
 
-### 优化
-- 导航重整为「概览」「使用」「专注」三页，设置移入导航栏底部。
-- 「统计」并入「使用」作为「趋势」标签页，「专注历史」并入「专注」作为标签页，去掉重复页面与重复入口。
-- 概览精简为今日数据，新增今日应用 Top 5，删除与趋势页重复的 30 天图表。
-- 应用详情由弹窗改为主从布局：左列表、右详情，选中行以强调色高亮。
-- 设置页重组为「常规」「数据」「关于」三组，诊断移入「关于」。
-- 暂停记录入口上移到概览标题栏，与设置页共用同一开关。
-- 界面刷新间隔由 1 秒改为 2 秒；Top 5、小时柱与数字仅在数值变化时重绘。
+### Improvements
+- Reorganized navigation into Overview, Usage, and Focus, with Settings moved to the bottom of the navigation pane.
+- Merged Statistics into Usage as a Trends tab and full focus history into Focus as a tab, removing duplicated pages and entry points.
+- Reduced the Overview to today's figures and added a top-5 application list; removed the 30-day chart that duplicated the Trends tab.
+- Replaced the application-detail dialog with a master-detail layout: list on the left, details on the right, selected row highlighted in the accent color.
+- Grouped Settings into General, Data, and About, and moved Diagnostics into About.
+- Moved the pause-recording control to the Overview header, sharing one toggle with Settings.
+- Changed the interface refresh interval from 1 second to 2 seconds; the top-5 list, hourly bars, and figures are now redrawn only when their values change.
 
-### 修复
-- 修复应用详情中的使用占比以该应用自身总时长作为分母，导致显示 100% 的问题。
-- 修复切换「使用」标签页后需要等待下一次轮询才显示数据的问题。
-- 修复应用列表被右侧详情面板挤窄、应用名被硬截断的问题。
-- 修复今日没有任何应用记录时 Top 5 不显示空状态的问题。
-- 修复切换语言后应用详情仍显示旧语言的问题。
-- 修复切换时间范围或日期后右侧仍显示旧范围数据的问题。
-- 修复清空选择后迟到的查询错误覆盖当前状态的问题。
-- 修复修改强调色重建导航后底部「设置」选中态丢失的问题。
-- 修复趋势图与 Top 5 占比条随每次刷新闪烁的问题。
+### Fixes
+- Fixed the application usage share being calculated against the application's own total, which displayed 100%.
+- Fixed the Usage tabs needing to wait for the next poll before showing data after a tab switch.
+- Fixed the application list being squeezed by the detail panel, which truncated application names.
+- Fixed the top-5 list not showing an empty state when no application usage was recorded today.
+- Fixed the application detail still showing the previous language after a language change.
+- Fixed the detail panel still showing the previous range after changing the time range or date.
+- Fixed a late query error overwriting the current state after the selection was cleared.
+- Fixed the Settings item losing its selected state in the navigation footer after the accent color was changed and the navigation rebuilt.
+- Fixed the trend chart and top-5 share bars flickering on every refresh.
 
-### 文档与法律
-- 重写使用条款与隐私政策：补充定义、记录范围的技术说明、他人监控的禁止性约定、导出数据的敏感性提示、未加密存储的披露、责任限制上限、消费者法定权利保留、语言优先级与联系方式。
-- 条款接受标记改为按版本区分（`TermsAccepted_v0_9_2`），升级后首次启动会重新展示条款与隐私政策。
-- 同步更新 README、README.zh-CN、安装脚本、构建脚本与数据模型文档中的版本号。
+### Documentation and legal
+- Rewrote the Terms of Use and Privacy Policy: added definitions, a technical description of what is recorded, a prohibition on covert monitoring of other people, a warning that exported data is sensitive, disclosure that storage is unencrypted, a liability cap, a reservation of mandatory consumer rights, language precedence, and contact details.
+- Made the terms acceptance flag version-specific (`TermsAccepted_v0_9_2`), so the Terms and Privacy Policy are presented again on the first launch after upgrading.
+- Updated the version number in the README, README.zh-CN, installer script, build scripts, and the data-model document.
 
 ## v0.9.1
 ### 修复
