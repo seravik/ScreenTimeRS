@@ -1561,7 +1561,7 @@ public sealed class SettingsPage : Page
     readonly ComboBox theme, language;
     ColorPicker colorPicker = null!;
     readonly TextBlock pageTitle, generalTitle, appearanceTitle, startupText, languageTitle, aboutText;
-    readonly TextBlock dataSectionTitle, legalSectionTitle, advancedTitle, aboutTitle;
+    readonly TextBlock dataSectionTitle, legalSectionTitle, aboutTitle;
     readonly TextBlock themeModeLabel, languageModeLabel, legalHint, dataCardTitle;
     readonly TextBlock paletteTitle, customColorTitle, accentHint, dataHint;
     readonly TextBlock dataLocationTitle, dataLocationText, dataLocationHint;
@@ -1661,7 +1661,7 @@ public sealed class SettingsPage : Page
         // Appearance
         appearanceTitle = new TextBlock
         {
-            FontSize = 20,
+            FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
@@ -1774,7 +1774,7 @@ public sealed class SettingsPage : Page
         // Language
         languageTitle = new TextBlock
         {
-            FontSize = 20,
+            FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
@@ -1829,6 +1829,54 @@ public sealed class SettingsPage : Page
         dataCard = CreateSettingsCard(dataContent);
         p.Children.Add(dataCard);
 
+        // Data location and maintenance stay in the data section.
+        dataLocationTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        dataLocationText = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap,
+            Text = GetDataDirectory()
+        };
+        dataLocationHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
+        openDataFolderButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        openDataFolderButton.Click += (_, _) => OpenDataFolder();
+        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        pauseButton.Click += (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty);
+        backupButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        backupButton.Click += (_, _) => BackupRequested?.Invoke(this, EventArgs.Empty);
+        var maintenanceButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
+        maintenanceButtons.Children.Add(openDataFolderButton);
+        maintenanceButtons.Children.Add(pauseButton);
+        maintenanceButtons.Children.Add(backupButton);
+        var advancedContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
+        advancedContent.Children.Add(dataLocationTitle);
+        advancedContent.Children.Add(dataLocationText);
+        advancedContent.Children.Add(dataLocationHint);
+        advancedContent.Children.Add(maintenanceButtons);
+        advancedCard = CreateSettingsCard(advancedContent);
+        p.Children.Add(advancedCard);
+
+        // About: version, diagnostics, then the legal notices.
+        diagnosticsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        diagnosticsButton.Click += (_, _) => DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
+
+        aboutTitle = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        p.Children.Add(aboutTitle);
+
+        aboutText = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = .55,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(4, 0, 0, 0)
+        };
+
         termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         termsButton.Click += TermsButton_Click;
         var legalContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
@@ -1847,63 +1895,12 @@ public sealed class SettingsPage : Page
         legalContent.Children.Add(legalHint);
         legalContent.Children.Add(termsButton);
         legalCard = CreateSettingsCard(legalContent);
+
+        var aboutContent = new StackPanel { Spacing = 10, Padding = new Thickness(14) };
+        aboutContent.Children.Add(aboutText);
+        aboutContent.Children.Add(diagnosticsButton);
+        p.Children.Add(CreateSettingsCard(aboutContent));
         p.Children.Add(legalCard);
-
-        // Advanced
-        advancedTitle = new TextBlock
-        {
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 6, 0, 0)
-        };
-        p.Children.Add(advancedTitle);
-
-        dataLocationTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        dataLocationText = new TextBlock
-        {
-            FontSize = 12,
-            Opacity = .65,
-            TextWrapping = TextWrapping.Wrap,
-            Text = GetDataDirectory()
-        };
-        dataLocationHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
-        openDataFolderButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        openDataFolderButton.Click += (_, _) => OpenDataFolder();
-        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        pauseButton.Click += (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty);
-        backupButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        backupButton.Click += (_, _) => BackupRequested?.Invoke(this, EventArgs.Empty);
-        diagnosticsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        diagnosticsButton.Click += (_, _) => DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
-        var advancedButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
-        advancedButtons.Children.Add(openDataFolderButton);
-        advancedButtons.Children.Add(pauseButton);
-        advancedButtons.Children.Add(backupButton);
-        advancedButtons.Children.Add(diagnosticsButton);
-        var advancedContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
-        advancedContent.Children.Add(dataLocationTitle);
-        advancedContent.Children.Add(dataLocationText);
-        advancedContent.Children.Add(dataLocationHint);
-        advancedContent.Children.Add(advancedButtons);
-        advancedCard = CreateSettingsCard(advancedContent);
-        p.Children.Add(advancedCard);
-
-        aboutTitle = new TextBlock
-        {
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 6, 0, 0)
-        };
-        p.Children.Add(aboutTitle);
-
-        aboutText = new TextBlock
-        {
-            FontSize = 12,
-            Opacity = .55,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(4, 0, 0, 0)
-        };
-        p.Children.Add(aboutText);
 
         Content = new ScrollViewer
         {
@@ -2457,7 +2454,7 @@ public sealed class SettingsPage : Page
             : hant ? "選擇預設主題色或自由取色，修改後會立即套用到整個介面。"
             : "选择预设主题色或自由取色，修改后会立即应用到整个界面。";
         languageTitle.Text = en ? "Language" : hant ? "語言" : "语言";
-        dataSectionTitle.Text = en ? "Data & Privacy" : hant ? "資料與隱私" : "数据与隐私";
+        dataSectionTitle.Text = en ? "Data" : hant ? "資料" : "数据";
         themeModeLabel.Text = en ? "Theme" : hant ? "主題" : "主题";
         languageModeLabel.Text = en ? "Display language" : hant ? "顯示語言" : "显示语言";
         dataHint.Text = en
@@ -2473,7 +2470,6 @@ public sealed class SettingsPage : Page
         legalSectionTitle.Text = en ? "Terms & Privacy" : hant ? "使用條款與隱私" : "使用条款与隐私";
         legalHint.Text = en ? "Review how ScreenTime RS records, stores, and handles local usage data." : hant ? "查看 ScreenTime RS 如何記錄、儲存及處理本機使用資料。" : "查看 ScreenTime RS 如何记录、存储和处理本机使用数据。";
         termsButton.Content = en ? "View terms and privacy policy" : hant ? "檢視使用條款與隱私權政策" : "查看使用条款与隐私政策";
-        advancedTitle.Text = en ? "Advanced" : hant ? "進階" : "高级";
         aboutTitle.Text = en ? "About" : hant ? "關於" : "关于";
         dataLocationTitle.Text = en ? "Data location" : hant ? "資料位置" : "数据位置";
         dataLocationHint.Text = en
