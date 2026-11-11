@@ -1794,9 +1794,8 @@ public sealed class SettingsPage : Page
     readonly Button[] paletteButtons = new Button[7];
     readonly Grid rootGrid;
     readonly ScrollViewer scroll;
-    readonly Border stickyHeader;
-    readonly TextBlock stickyText;
-    readonly TextBlock[] groupHeadings;
+    readonly Button[] sectionChips = new Button[3];
+    readonly FrameworkElement[] sectionAnchors;
     ColorSpectrum? colorSpectrum;
     bool colorSpectrumPointerDown;
     bool updatingTheme;
@@ -1806,6 +1805,7 @@ public sealed class SettingsPage : Page
     LanguageMode _languagePreference;
     UIColor _accentColor;
     bool _monitorPaused;
+    int _activeSection;
 
     public event EventHandler<ThemeMode>? ThemeModeChanged;
     public event EventHandler<LanguageMode>? LanguageChanged;
@@ -1825,11 +1825,15 @@ public sealed class SettingsPage : Page
 
         var p = new StackPanel
         {
-            Spacing = 24,
-            Padding = new Thickness(28),
+            Spacing = 40,
+            Padding = new Thickness(28, 6, 28, 28),
             MaxWidth = 860,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+
+        var generalPanel = new StackPanel { Spacing = 24 };
+        var dataPanel = new StackPanel { Spacing = 24 };
+        var aboutPanel = new StackPanel { Spacing = 24 };
 
         pageTitle = new TextBlock
         {
@@ -1837,7 +1841,6 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         };
-        p.Children.Add(pageTitle);
 
         // General
         generalTitle = new TextBlock
@@ -1846,7 +1849,7 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 4, 0, 0)
         };
-        p.Children.Add(generalTitle);
+        p.Children.Add(generalPanel);
 
         startupEnabled = StartupEnabled();
         startupText = new TextBlock
@@ -1877,7 +1880,7 @@ public sealed class SettingsPage : Page
         startupToggle.Children.Add(startupBox);
         startupToggle.Children.Add(startupText);
         startupToggle.PointerPressed += (_, _) => ToggleStartup();
-        p.Children.Add(CreateSettingsCard(startupToggle));
+        generalPanel.Children.Add(CreateSettingsCard(startupToggle));
         ApplyStartupAccent(_accentColor);
 
         // Appearance
@@ -1887,7 +1890,7 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
-        p.Children.Add(appearanceTitle);
+        generalPanel.Children.Add(appearanceTitle);
 
         themeModeLabel = new TextBlock
         {
@@ -1895,11 +1898,11 @@ public sealed class SettingsPage : Page
             Opacity = .65,
             Margin = new Thickness(2, 0, 0, 0)
         };
-        p.Children.Add(themeModeLabel);
+        generalPanel.Children.Add(themeModeLabel);
         theme = new ComboBox { Width = 260 };
         theme.SelectionChanged += Theme_SelectionChanged;
         ApplyComboBoxAccent(theme, _accentColor);
-        p.Children.Add(theme);
+        generalPanel.Children.Add(theme);
 
         paletteTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
 
@@ -1991,7 +1994,7 @@ public sealed class SettingsPage : Page
             Padding = new Thickness(0),
             Content = themeContent
         };
-        p.Children.Add(CreateSettingsCard(themeColorsExpander));
+        generalPanel.Children.Add(CreateSettingsCard(themeColorsExpander));
 
         // Language
         languageTitle = new TextBlock
@@ -2000,18 +2003,18 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
-        p.Children.Add(languageTitle);
+        generalPanel.Children.Add(languageTitle);
         languageModeLabel = new TextBlock
         {
             FontSize = 13,
             Opacity = .65,
             Margin = new Thickness(2, 0, 0, 0)
         };
-        p.Children.Add(languageModeLabel);
+        generalPanel.Children.Add(languageModeLabel);
         language = new ComboBox { Width = 260 };
         language.SelectionChanged += Language_SelectionChanged;
         ApplyComboBoxAccent(language, _accentColor);
-        p.Children.Add(language);
+        generalPanel.Children.Add(language);
 
         // Recording state belongs to General: it changes how the app runs, not where data lives.
         monitoringTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
@@ -2029,7 +2032,7 @@ public sealed class SettingsPage : Page
         monitoringContent.Children.Add(monitoringTitle);
         monitoringContent.Children.Add(monitoringHint);
         monitoringContent.Children.Add(monitoringActions);
-        p.Children.Add(CreateSettingsCard(monitoringContent));
+        generalPanel.Children.Add(CreateSettingsCard(monitoringContent));
 
         // Data & Privacy
         dataSectionTitle = new TextBlock
@@ -2038,7 +2041,7 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
-        p.Children.Add(dataSectionTitle);
+        p.Children.Add(dataPanel);
 
         dataHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
         exportDataButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
@@ -2065,7 +2068,7 @@ public sealed class SettingsPage : Page
         dataContent.Children.Add(dataCardTitle);
         dataContent.Children.Add(dataHint);
         dataContent.Children.Add(dataButtons);
-        p.Children.Add(CreateSettingsCard(dataContent));
+        dataPanel.Children.Add(CreateSettingsCard(dataContent));
 
         // Destructive actions get their own visually separated card.
         dangerTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
@@ -2081,7 +2084,7 @@ public sealed class SettingsPage : Page
         dangerContent.Children.Add(dangerTitle);
         dangerContent.Children.Add(dangerHint);
         dangerContent.Children.Add(dangerActions);
-        p.Children.Add(CreateDangerCard(dangerContent));
+        dataPanel.Children.Add(CreateDangerCard(dangerContent));
 
         // Data location and maintenance stay in the data section.
         dataLocationTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
@@ -2105,7 +2108,7 @@ public sealed class SettingsPage : Page
         locationContent.Children.Add(dataLocationText);
         locationContent.Children.Add(dataLocationHint);
         locationContent.Children.Add(maintenanceButtons);
-        p.Children.Add(CreateSettingsCard(locationContent));
+        dataPanel.Children.Add(CreateSettingsCard(locationContent));
 
         // About: version, diagnostics, then the legal notices.
         diagnosticsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
@@ -2117,7 +2120,7 @@ public sealed class SettingsPage : Page
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 6, 0, 0)
         };
-        p.Children.Add(aboutTitle);
+        p.Children.Add(aboutPanel);
 
         aboutText = new TextBlock
         {
@@ -2150,52 +2153,57 @@ public sealed class SettingsPage : Page
 
         var aboutContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
         aboutContent.Children.Add(aboutText);
-        p.Children.Add(CreateSettingsCard(aboutContent));
+        aboutPanel.Children.Add(CreateSettingsCard(aboutContent));
 
         var diagnosticsContent = new StackPanel { Spacing = 8, Padding = new Thickness(14) };
         diagnosticsContent.Children.Add(diagnosticsTitle);
         diagnosticsContent.Children.Add(diagnosticsHint);
         diagnosticsContent.Children.Add(diagnosticsButton);
-        p.Children.Add(CreateSettingsCard(diagnosticsContent));
+        aboutPanel.Children.Add(CreateSettingsCard(diagnosticsContent));
 
-        p.Children.Add(CreateSettingsCard(legalContent));
+        aboutPanel.Children.Add(CreateSettingsCard(legalContent));
 
-        groupHeadings = new[] { generalTitle, dataSectionTitle, aboutTitle };
+        sectionAnchors = new FrameworkElement[] { generalPanel, dataPanel, aboutPanel };
 
-        stickyText = new TextBlock
+        // A fixed section switcher replaces the earlier floating header: it stays
+        // visible while the body scrolls, so the current section is always obvious
+        // and clicking it jumps to the group.
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        for (int i = 0; i < sectionChips.Length; i++)
         {
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        stickyHeader = new Border
+            sectionChips[i] = CreateSectionChip(i);
+            chips.Children.Add(sectionChips[i]);
+        }
+
+        var header = new StackPanel
         {
-            Height = 52,
-            Visibility = Visibility.Collapsed,
-            Child = stickyText,
-            Padding = new Thickness(28, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            IsHitTestVisible = false
+            Spacing = 12,
+            Padding = new Thickness(28, 24, 28, 10),
+            MaxWidth = 860,
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        header.Children.Add(pageTitle);
+        header.Children.Add(chips);
+
         scroll = new ScrollViewer
         {
             Content = p,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        scroll.ViewChanged += (_, _) => UpdateStickyHeader();
-        scroll.SizeChanged += (_, _) => UpdateStickyHeader();
+        scroll.ViewChanged += (_, _) => UpdateSectionChip();
+        scroll.SizeChanged += (_, _) => UpdateSectionChip();
 
         rootGrid = new Grid();
+        rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(header, 0);
+        Grid.SetRow(scroll, 1);
+        rootGrid.Children.Add(header);
         rootGrid.Children.Add(scroll);
-        rootGrid.Children.Add(stickyHeader);
         Content = rootGrid;
 
-        Loaded += (_, _) => ApplyStickyHeaderTheme();
-        ActualThemeChanged += (_, _) => ApplyStickyHeaderTheme();
+        ActualThemeChanged += (_, _) => UpdateSectionChip();
 
         SetLanguage(languageMode, LanguageResolver.Resolve(languageMode));
         SetThemeMode(mode);
@@ -2222,68 +2230,100 @@ public sealed class SettingsPage : Page
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
 
-    private void ApplyStickyHeaderTheme()
+    private Button CreateSectionChip(int index)
     {
-        Microsoft.UI.Xaml.Media.Brush? background = null;
-        try
+        var chip = new Button
         {
-            if (XamlRoot?.Content is Panel root)
-                background = root.Background;
-        }
-        catch { }
-
-        if (background is null)
-        {
-            background = new SolidColorBrush(ActualTheme == ElementTheme.Dark
-                ? UIColor.FromArgb(255, 32, 32, 32)
-                : UIColor.FromArgb(255, 243, 243, 243));
-        }
-
-        stickyHeader.Background = background;
-        stickyHeader.BorderBrush = new SolidColorBrush(ActualTheme == ElementTheme.Dark
-            ? UIColor.FromArgb(48, 255, 255, 255)
-            : UIColor.FromArgb(24, 0, 0, 0));
+            Padding = new Thickness(16, 5, 16, 5),
+            CornerRadius = new CornerRadius(16),
+            BorderThickness = new Thickness(1),
+            FontSize = 13,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        chip.Click += (_, _) => ScrollToSection(index);
+        return chip;
     }
 
-    private void UpdateStickyHeader()
+    private void ScrollToSection(int index)
     {
         try
         {
-            if (scroll.Content is not UIElement content || groupHeadings.Length == 0 || scroll.ActualHeight <= 0)
+            if (scroll.Content is not UIElement content || sectionAnchors.Length == 0)
                 return;
 
-            var offset = scroll.VerticalOffset;
-            if (offset <= 0.5)
+            var target = sectionAnchors[Math.Clamp(index, 0, sectionAnchors.Length - 1)];
+            var y = target.TransformToVisual(content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+            var maxOffset = Math.Max(0, content.ActualSize.Y - scroll.ViewportHeight);
+            var wanted = Math.Max(0, y - 8);
+
+            // The last group can never reach the top of the viewport, so jump to the
+            // end instead of stopping short and leaving the wrong chip highlighted.
+            var destination = index >= sectionAnchors.Length - 1 || wanted > maxOffset - 1
+                ? maxOffset
+                : wanted;
+            scroll.ChangeView(null, destination, null, true);
+        }
+        catch { }
+    }
+
+    private void UpdateSectionChip()
+    {
+        try
+        {
+            if (scroll.Content is not UIElement content || sectionAnchors.Length == 0 || scroll.ActualHeight <= 0)
             {
-                stickyHeader.Visibility = Visibility.Collapsed;
+                UpdateChipVisuals(_activeSection);
                 return;
             }
 
-            TextBlock? active = null;
-            foreach (var heading in groupHeadings)
+            var offset = scroll.VerticalOffset;
+            var maxOffset = Math.Max(0, content.ActualSize.Y - scroll.ViewportHeight);
+            var active = 0;
+            for (int i = 0; i < sectionAnchors.Length; i++)
             {
+                var heading = sectionAnchors[i];
                 if (heading.ActualHeight <= 0)
                     continue;
                 var y = heading.TransformToVisual(content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-                if (y <= offset + 6)
-                    active = heading;
+                if (y <= offset + 24)
+                    active = i;
             }
 
-            if (active is null || string.IsNullOrEmpty(active.Text))
-            {
-                stickyHeader.Visibility = Visibility.Collapsed;
-                return;
-            }
+            // At the very bottom the last group is the one being read, even though its
+            // top edge never crosses the trigger line.
+            if (maxOffset > 0 && offset >= maxOffset - 2)
+                active = sectionAnchors.Length - 1;
 
-            // Keep the pinned header inside the content column so it lines up with the cards
-            // instead of stretching across the empty gutter.
-            var left = Math.Max(0, content.TransformToVisual(scroll).TransformPoint(new Windows.Foundation.Point(0, 0)).X);
-            stickyHeader.Margin = new Thickness(left, 0, 0, 0);
-            stickyHeader.Width = content.ActualSize.X;
-            stickyText.Text = active.Text;
-            stickyHeader.Visibility = Visibility.Visible;
+            _activeSection = active;
+            UpdateChipVisuals(active);
         }
-        catch { }
+        catch
+        {
+            UpdateChipVisuals(_activeSection);
+        }
+    }
+
+    private void UpdateChipVisuals(int activeIndex)
+    {
+        for (int i = 0; i < sectionChips.Length; i++)
+        {
+            var chip = sectionChips[i];
+            if (chip is null)
+                continue;
+
+            var selected = i == activeIndex;
+            chip.Background = selected
+                ? new SolidColorBrush(ColorWithAlpha(_accentColor, 32))
+                : new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0));
+            chip.BorderBrush = selected
+                ? new SolidColorBrush(ColorWithAlpha(_accentColor, 150))
+                : new SolidColorBrush(UIColor.FromArgb(45, 128, 128, 128));
+            chip.Foreground = selected
+                ? new SolidColorBrush(_accentColor)
+                : new SolidColorBrush(ActualTheme == ElementTheme.Dark
+                    ? UIColor.FromArgb(255, 225, 225, 225)
+                    : UIColor.FromArgb(255, 60, 60, 60));
+        }
     }
 
     private static string GetDataDirectory() => Path.Combine(
@@ -2724,6 +2764,7 @@ public sealed class SettingsPage : Page
         updatingColor = false;
         UpdatePaletteVisuals();
         BindColorSpectrumInteraction();
+        UpdateChipVisuals(_activeSection);
     }
 
     void ApplyStartupAccent(UIColor color)
@@ -2862,7 +2903,10 @@ public sealed class SettingsPage : Page
             ? "ScreenTime RS · Version 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI"
             : hant ? "ScreenTime RS · 版本 0.9.2 · Rust 監控核心 + WinUI 3 / Fluent UI"
             : "ScreenTime RS · 版本 0.9.2 · Rust 监控核心 + WinUI 3 / Fluent UI";
-        UpdateStickyHeader();
+        sectionChips[0].Content = generalTitle.Text;
+        sectionChips[1].Content = dataSectionTitle.Text;
+        sectionChips[2].Content = aboutTitle.Text;
+        UpdateSectionChip();
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
