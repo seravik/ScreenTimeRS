@@ -1792,6 +1792,11 @@ public sealed class SettingsPage : Page
     readonly TextBlock colorSpectrumTooltipText;
     readonly Button termsButton;
     readonly Button[] paletteButtons = new Button[7];
+    readonly Grid rootGrid;
+    readonly ScrollViewer scroll;
+    readonly Border stickyHeader;
+    readonly TextBlock stickyText;
+    readonly TextBlock[] groupHeadings;
     ColorSpectrum? colorSpectrum;
     bool colorSpectrumPointerDown;
     bool updatingTheme;
@@ -2155,12 +2160,42 @@ public sealed class SettingsPage : Page
 
         p.Children.Add(CreateSettingsCard(legalContent));
 
-        Content = new ScrollViewer
+        groupHeadings = new[] { generalTitle, dataSectionTitle, aboutTitle };
+
+        stickyText = new TextBlock
+        {
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        stickyHeader = new Border
+        {
+            Height = 52,
+            Visibility = Visibility.Collapsed,
+            Child = stickyText,
+            Padding = new Thickness(28, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            IsHitTestVisible = false
+        };
+        scroll = new ScrollViewer
         {
             Content = p,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
+        scroll.ViewChanged += (_, _) => UpdateStickyHeader();
+        scroll.SizeChanged += (_, _) => UpdateStickyHeader();
+
+        rootGrid = new Grid();
+        rootGrid.Children.Add(scroll);
+        rootGrid.Children.Add(stickyHeader);
+        Content = rootGrid;
+
+        Loaded += (_, _) => ApplyStickyHeaderTheme();
+        ActualThemeChanged += (_, _) => ApplyStickyHeaderTheme();
 
         SetLanguage(languageMode, LanguageResolver.Resolve(languageMode));
         SetThemeMode(mode);
@@ -2186,6 +2221,70 @@ public sealed class SettingsPage : Page
         Child = content,
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
+
+    private void ApplyStickyHeaderTheme()
+    {
+        Microsoft.UI.Xaml.Media.Brush? background = null;
+        try
+        {
+            if (XamlRoot?.Content is Panel root)
+                background = root.Background;
+        }
+        catch { }
+
+        if (background is null)
+        {
+            background = new SolidColorBrush(ActualTheme == ElementTheme.Dark
+                ? UIColor.FromArgb(255, 32, 32, 32)
+                : UIColor.FromArgb(255, 243, 243, 243));
+        }
+
+        stickyHeader.Background = background;
+        stickyHeader.BorderBrush = new SolidColorBrush(ActualTheme == ElementTheme.Dark
+            ? UIColor.FromArgb(48, 255, 255, 255)
+            : UIColor.FromArgb(24, 0, 0, 0));
+    }
+
+    private void UpdateStickyHeader()
+    {
+        try
+        {
+            if (scroll.Content is not UIElement content || groupHeadings.Length == 0 || scroll.ActualHeight <= 0)
+                return;
+
+            var offset = scroll.VerticalOffset;
+            if (offset <= 0.5)
+            {
+                stickyHeader.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            TextBlock? active = null;
+            foreach (var heading in groupHeadings)
+            {
+                if (heading.ActualHeight <= 0)
+                    continue;
+                var y = heading.TransformToVisual(content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                if (y <= offset + 6)
+                    active = heading;
+            }
+
+            if (active is null || string.IsNullOrEmpty(active.Text))
+            {
+                stickyHeader.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // Keep the pinned header inside the content column so it lines up with the cards
+            // instead of stretching across the empty gutter.
+            var left = Math.Max(0, content.TransformToVisual(scroll).TransformPoint(new Windows.Foundation.Point(0, 0)).X);
+            stickyHeader.Margin = new Thickness(left, 0, 0, 0);
+            stickyHeader.Width = content.ActualSize.X;
+            stickyText.Text = active.Text;
+            stickyHeader.Visibility = Visibility.Visible;
+        }
+        catch { }
+    }
 
     private static string GetDataDirectory() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -2763,6 +2862,7 @@ public sealed class SettingsPage : Page
             ? "ScreenTime RS · Version 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI"
             : hant ? "ScreenTime RS · 版本 0.9.2 · Rust 監控核心 + WinUI 3 / Fluent UI"
             : "ScreenTime RS · 版本 0.9.2 · Rust 监控核心 + WinUI 3 / Fluent UI";
+        UpdateStickyHeader();
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
