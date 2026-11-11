@@ -52,13 +52,11 @@ public sealed partial class MainWindow : Window
     private static extern bool MessageBeep(uint uType);
 
     private readonly OverviewPage _overviewPage;
-    private readonly AppsPage _appsPage;
-    private readonly StatsPage _statsPage;
+    private readonly UsagePage _usagePage;
     private FocusPage? _focusPage;
     private UIElement? _focusContent;
     private readonly FocusHistoryPage _focusHistoryPage;
     private readonly SettingsPage _settingsPage;
-    private readonly UsageShellPage _usageShell;
     private readonly FocusShellPage _focusShell;
 
     private LanguageMode UiLanguage => LanguageResolver.Resolve(_languageMode);
@@ -113,8 +111,7 @@ public sealed partial class MainWindow : Window
 
         _overviewPage = new OverviewPage();
         _overviewPage.PauseToggleRequested += (_, _) => TogglePause();
-        _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
-        _statsPage = new StatsPage(LoadStatsPeriodAsync);
+        _usagePage = new UsagePage(RunCollectorQueryAsync);
         _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, () => { }, RefreshRecentFocusHistory);
         _focusHistoryPage.ApplyAccent(accent);
         _focusHistoryPage.ApplyLanguage(UiLanguage);
@@ -128,7 +125,6 @@ public sealed partial class MainWindow : Window
         _settingsPage.PauseRequested += SettingsPage_PauseRequested;
         _settingsPage.BackupRequested += SettingsPage_BackupRequested;
         _settingsPage.DiagnosticsRequested += SettingsPage_DiagnosticsRequested;
-        _usageShell = new UsageShellPage(_statsPage, _appsPage);
         _focusShell = new FocusShellPage(GetFocusContent, _focusHistoryPage);
         ApplyAccent(accent);
 
@@ -336,7 +332,7 @@ public sealed partial class MainWindow : Window
         ThemeManager.ApplyAccent(color);
 
         _overviewPage?.ApplyAccent(color);
-        _usageShell?.ApplyAccent(color);
+        _usagePage?.ApplyAccent(color);
         _focusShell?.ApplyAccent(color);
         _settingsPage?.ApplyAccent(color);
     }
@@ -375,7 +371,7 @@ public sealed partial class MainWindow : Window
                 break;
         }
         _overviewPage.ApplyLanguage(effective);
-        _usageShell.ApplyLanguage(effective);
+        _usagePage.ApplyLanguage(effective);
         _focusShell.ApplyLanguage(effective);
         _settingsPage.SetLanguage(language, effective);
     }
@@ -647,7 +643,7 @@ public sealed partial class MainWindow : Window
         ContentFrame.Content = item.Tag?.ToString() switch
         {
             "overview" => _overviewPage,
-            "usage" => _usageShell,
+            "usage" => _usagePage,
             "focus" => ActivateFocusShell(),
             "settings" => _settingsPage,
             _ => _overviewPage
@@ -721,7 +717,7 @@ public sealed partial class MainWindow : Window
         switch (Nav.SelectedItem is NavigationViewItem item ? item.Tag?.ToString() : "overview")
         {
             case "usage":
-                _usageShell.UpdateSnapshot(_latestSnapshot);
+                _usagePage.UpdateSnapshot(_latestSnapshot);
                 break;
             case "focus":
                 try
@@ -1086,51 +1082,6 @@ public sealed partial class MainWindow : Window
         catch { return null; }
     }
 
-    private async Task LoadDayUsageAsync(DateTime date)
-    {
-        var text = await RunCollectorQueryAsync("--query-day", date.ToString("yyyy-MM-dd"));
-        if (text is null) return;
-        try
-        {
-            var data = JsonSerializer.Deserialize<DayUsageResponse>(text);
-            if (data is not null)
-                _appsPage.SetSelectedDay(data);
-        }
-        catch { }
-    }
-
-    private async Task LoadAppsAllTimeAsync()
-    {
-        var text = await RunCollectorQueryAsync("--query-all");
-        if (text is null) return;
-        try
-        {
-            var data = JsonSerializer.Deserialize<RangeUsageResponse>(text);
-            if (data is not null)
-                _appsPage.SetAllTimeData(data);
-        }
-        catch { }
-    }
-
-    private async Task LoadStatsPeriodAsync(int periodIndex)
-    {
-        if (periodIndex != 4)
-        {
-            _statsPage.SetAllTimeData(null);
-            return;
-        }
-
-        var text = await RunCollectorQueryAsync("--query-all");
-        if (text is null) return;
-        try
-        {
-            var data = JsonSerializer.Deserialize<RangeUsageResponse>(text);
-            if (data is not null)
-                _statsPage.SetAllTimeData(data);
-        }
-        catch { }
-    }
-
     private async Task<FocusSession[]?> LoadFocusHistoryAsync(int limit, int offset)
     {
         var text = await RunCollectorQueryAsync("--focus-history", limit.ToString(), offset.ToString());
@@ -1143,62 +1094,6 @@ public sealed partial class MainWindow : Window
         catch { return null; }
     }
 
-    private async Task ShowAppDetailsAsync(AppStat app)
-    {
-        try
-        {
-            var index = _appsPage.SelectedPeriodIndex;
-            var args = new List<string> { "--query-app", app.name };
-            if (index == 6 && _appsPage.SelectedDay is DateTime selectedDay)
-            {
-                var date = selectedDay.ToString("yyyy-MM-dd");
-                args.Add(date);
-                args.Add(date);
-            }
-            else if (index != 5)
-            {
-                var today = DateTime.Today;
-                var start = index switch
-                {
-                    1 => today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1)),
-                    2 => new DateTime(today.Year, today.Month, 1),
-                    3 => today.AddMonths(-6),
-                    4 => today.AddMonths(-12),
-                    _ => today
-                };
-                args.Add(start.ToString("yyyy-MM-dd"));
-                args.Add(today.ToString("yyyy-MM-dd"));
-            }
-
-            var text = await RunCollectorQueryAsync(args.ToArray());
-            if (text is null)
-            {
-                _appsPage.ShowDetailError();
-                return;
-            }
-
-            AppHistoryResponse? history = null;
-            try { history = JsonSerializer.Deserialize<AppHistoryResponse>(text); } catch { }
-            if (history is null)
-            {
-                _appsPage.ShowDetailError();
-                return;
-            }
-
-            // Share is relative to the whole selected range, not to this app's
-            // own total. AppsPage caches the range denominator while rendering.
-            var total = _appsPage.RangeTotal;
-            if (total <= 0)
-                total = history.daily.Sum(x => Math.Max(0, x.seconds));
-
-            _appsPage.ShowDetails(history, app, total);
-        }
-        catch
-        {
-            _appsPage.ShowDetailError();
-        }
-    }
-
     private async Task RefreshAfterDataChangeAsync()
     {
         for (int i = 0; i < 6; i++)
@@ -1207,13 +1102,6 @@ public sealed partial class MainWindow : Window
             UpdatePages(LoadSnapshot() ?? new Snapshot());
         }
 
-        if (_appsPage.SelectedPeriodIndex == 5)
-            await LoadAppsAllTimeAsync();
-        else if (_appsPage.SelectedPeriodIndex == 6 && _appsPage.SelectedDay is DateTime selectedDay)
-            await LoadDayUsageAsync(selectedDay);
-
-        if (_statsPage.AllTimeTotal is not null)
-            await LoadStatsPeriodAsync(4);
     }
 
     private async Task ShowDataOperationResultAsync(bool success, string successText, string failedText)

@@ -52,6 +52,118 @@ internal static class Str
         };
     }
 
+    internal static class Usage
+    {
+        public static string TrendsTab(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Trends",
+            LanguageMode.TraditionalChinese => "趨勢",
+            _ => "趋势"
+        };
+
+        public static string AppsTab(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Apps",
+            LanguageMode.TraditionalChinese => "應用",
+            _ => "应用"
+        };
+
+        public static string ShareHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Share is measured against the selected period.",
+            LanguageMode.TraditionalChinese => "百分比以所選時間段的總時長為分母。",
+            _ => "百分比以所选时间段的总时长为分母。"
+        };
+
+        public static string SearchPlaceholder(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Search apps",
+            LanguageMode.TraditionalChinese => "搜尋應用程式",
+            _ => "搜索应用"
+        };
+
+        public static string NoUsage(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Nothing recorded in this period.",
+            LanguageMode.TraditionalChinese => "此時間段沒有記錄。",
+            _ => "此时间段没有记录。"
+        };
+
+        public static string NoSelection(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Select an app to see its daily history.",
+            LanguageMode.TraditionalChinese => "選擇應用程式以查看每日明細。",
+            _ => "选择应用以查看每日明细。"
+        };
+
+        public static string LoadFailed(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Could not load this app. Try again.",
+            LanguageMode.TraditionalChinese => "無法載入該應用程式，請重試。",
+            _ => "无法加载该应用，请重试。"
+        };
+
+        public static string MetricLabel(int index, LanguageMode l) => (index, l) switch
+        {
+            (0, LanguageMode.English) => "Period total",
+            (0, LanguageMode.TraditionalChinese) => "期間總計",
+            (0, _) => "期间总计",
+            (1, LanguageMode.English) => "Daily average",
+            (1, LanguageMode.TraditionalChinese) => "日均使用",
+            (1, _) => "日均使用",
+            (2, LanguageMode.English) => "Active days",
+            (2, LanguageMode.TraditionalChinese) => "活躍天數",
+            (2, _) => "活跃天数",
+            (3, LanguageMode.English) => "Busiest day",
+            (3, LanguageMode.TraditionalChinese) => "最高單日",
+            _ => "最高单日"
+        };
+
+        public static string TrendRange(int index, LanguageMode l) => (index, l) switch
+        {
+            (0, LanguageMode.English) => "Last 30 days",
+            (0, LanguageMode.TraditionalChinese) => "最近 30 天",
+            (0, _) => "最近 30 天",
+            (1, LanguageMode.English) => "Last 90 days",
+            (1, LanguageMode.TraditionalChinese) => "最近 90 天",
+            (1, _) => "最近 90 天",
+            (2, LanguageMode.English) => "Last 6 months",
+            (2, LanguageMode.TraditionalChinese) => "近半年",
+            (2, _) => "近半年",
+            (3, LanguageMode.English) => "Last year",
+            (3, LanguageMode.TraditionalChinese) => "近一年",
+            (3, _) => "近一年",
+            (_, LanguageMode.English) => "All time",
+            (_, LanguageMode.TraditionalChinese) => "全部時間",
+            (_, _) => "全部时间"
+        };
+
+        public static string AppRange(int index, LanguageMode l) => (index, l) switch
+        {
+            (0, LanguageMode.English) => "Today",
+            (0, LanguageMode.TraditionalChinese) => "今天",
+            (0, _) => "今天",
+            (1, LanguageMode.English) => "This week",
+            (1, LanguageMode.TraditionalChinese) => "本週",
+            (1, _) => "本周",
+            (2, LanguageMode.English) => "This month",
+            (2, LanguageMode.TraditionalChinese) => "本月",
+            (2, _) => "本月",
+            (3, LanguageMode.English) => "Last 6 months",
+            (3, LanguageMode.TraditionalChinese) => "近半年",
+            (3, _) => "近半年",
+            (4, LanguageMode.English) => "Last year",
+            (4, LanguageMode.TraditionalChinese) => "近一年",
+            (4, _) => "近一年",
+            (5, LanguageMode.English) => "All time",
+            (5, LanguageMode.TraditionalChinese) => "全部時間",
+            (5, _) => "全部时间",
+            (_, LanguageMode.English) => "Selected day",
+            (_, LanguageMode.TraditionalChinese) => "指定日期",
+            (_, _) => "指定日期"
+        };
+    }
+
     internal static class Overview
     {
         public static string Title(LanguageMode l) => l switch
