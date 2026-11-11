@@ -241,7 +241,18 @@ public sealed partial class MainWindow : Window
         };
 
         _settingsPage?.SetThemeMode(mode);
-        ApplyAccent(CurrentAccent());
+        // RequestedTheme does not update ActualTheme synchronously, so reading
+        // it here can hand the previous theme's accent to the pages. Derive the
+        // accent from the requested mode, then refresh once the tree has settled
+        // for the "follow system" case.
+        var requested = mode switch
+        {
+            ThemeMode.Light => ElementTheme.Light,
+            ThemeMode.Dark => ElementTheme.Dark,
+            _ => RootGrid.ActualTheme
+        };
+        ApplyAccent(ThemeManager.AccentFor(requested));
+        DispatcherQueue.TryEnqueue(() => ApplyAccent(CurrentAccent()));
         ApplyTitleBarTheme();
         UpdateNavigationResizeHandle();
     }

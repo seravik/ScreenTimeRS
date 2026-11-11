@@ -286,6 +286,11 @@ public sealed class UsagePage : Page
         _accent = color;
         Ui.ApplyComboAccent(_trendRange, color);
         Ui.ApplyComboAccent(_appRange, color);
+        // The tab underline is a plain Border, not a ThemeResource, so it has
+        // to be repainted whenever the theme (and therefore the accent) changes.
+        // Without this it kept the colour it was built with and no longer
+        // matched the NavigationView indicator.
+        ApplyTabVisuals();
         RenderTrendChart();
         _listSignature = "";
         RenderAppList();

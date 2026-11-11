@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.UI;
 
@@ -20,7 +21,9 @@ public sealed class FocusPage : Page
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _durationLabel = new();
     private readonly TextBlock _customLabel = new();
-    private readonly ComboBox _preset = new();
+    private readonly TextBlock _minutesUnit = new();
+    private readonly Grid _presetRow = new() { ColumnSpacing = 6, RowSpacing = 8 };
+    private readonly List<Button> _presetButtons = new();
     private readonly TextBox _customMinutes = new();
     private readonly TextBlock _timer = new();
     private readonly TextBlock _state = new();
@@ -51,6 +54,13 @@ public sealed class FocusPage : Page
     // The full history is available on a dedicated page.
     private const int RecentHistoryLimit = 10;
     private StackPanel? _customEditorPanel;
+
+    // A row of equally sized duration buttons replaces the old dropdown: the
+    // options are visible at a glance, one click instead of two, and the card
+    // no longer has a wide empty gap between its label and its control.
+    static readonly int[] PresetMinutes = { 15, 25, 30, 45, 60, 90, 120 };
+    static int CustomIndex => PresetMinutes.Length;
+    int _selectedPreset = 1; // 25 minutes, matching the previous default.
 
     public FocusPage(Func<string[], Task<bool>> runCommand, Func<int, int, Task<FocusSession[]?>> loadHistory, Action navigateToHistory)
     {
@@ -105,16 +115,6 @@ public sealed class FocusPage : Page
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
 
-        // ScrollViewer content can otherwise keep a larger desired width than the
-        // viewport. That caused the right side of the Focus page to be clipped at
-        // normal window sizes. Keep the page content exactly within the visible
-        // width while preserving vertical scrolling.
-        root.SizeChanged += (_, e) =>
-        {
-            var available = e.NewSize.Width - root.Padding.Left - root.Padding.Right;
-            if (available > 0)
-                panel.Width = available;
-        };
 
         _title.FontSize = Ui.PageTitleSize;
         _title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
@@ -161,43 +161,58 @@ public sealed class FocusPage : Page
         panel.Children.Add(timerCard);
 
         var setupCard = Card();
-        var setup = new Grid { ColumnSpacing = 18, RowSpacing = 10 };
-        setup.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        setup.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
-        setup.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        setup.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var setup = new StackPanel { Spacing = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
 
-        _durationLabel.Text = "Focus duration";
         _durationLabel.FontSize = 14;
         _durationLabel.Opacity = .72;
-        _durationLabel.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(_durationLabel, 0);
-        Grid.SetRow(_durationLabel, 0);
         setup.Children.Add(_durationLabel);
 
-        _preset.MinWidth = 220;
-        _preset.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _preset.SelectionChanged += (_, _) => OnPresetChanged();
-        Grid.SetColumn(_preset, 1);
-        Grid.SetRow(_preset, 0);
-        setup.Children.Add(_preset);
+        for (var i = 0; i <= CustomIndex; i++)
+            _presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i <= CustomIndex; i++)
+        {
+            var index = i;
+            var label = new TextBlock
+            {
+                FontSize = Ui.BodySize,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center
+            };
+            var button = new Button
+            {
+                Content = label,
+                Tag = label,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(4, 9, 4, 9),
+                CornerRadius = new CornerRadius(6)
+            };
+            button.Click += (_, _) => SelectPreset(index);
+            Grid.SetColumn(button, i);
+            _presetRow.Children.Add(button);
+            _presetButtons.Add(button);
+        }
+        setup.Children.Add(_presetRow);
 
-        // Keep the custom-duration editor aligned with the preset selector.
-        // The previous full-width editor made the row visually unbalanced and
-        // much wider than the control above it.
         _customEditorPanel = new StackPanel
         {
-            Spacing = 0,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
             Visibility = Visibility.Collapsed
         };
-        _customLabel.Text = "Custom duration";
-        _customLabel.FontSize = 14;
+        _customLabel.FontSize = Ui.BodySize;
         _customLabel.Opacity = .72;
+        _customLabel.VerticalAlignment = VerticalAlignment.Center;
+        _minutesUnit.FontSize = Ui.BodySize;
+        _minutesUnit.Opacity = .72;
+        _minutesUnit.VerticalAlignment = VerticalAlignment.Center;
 
         _customMinutes.PlaceholderText = "Minutes";
-        _customMinutes.Width = 240;
-        _customMinutes.HorizontalAlignment = HorizontalAlignment.Right;
+        _customMinutes.Width = 120;
+        _customMinutes.VerticalAlignment = VerticalAlignment.Center;
         _customMinutes.TextChanged += (_, _) =>
         {
             if (IsCustomSelected())
@@ -207,18 +222,9 @@ public sealed class FocusPage : Page
         };
         _customMinutes.LostFocus += (_, _) => UpdateCustomDurationPreview();
 
-        var customRow = new Grid { ColumnSpacing = 18 };
-        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
-        Grid.SetColumn(_customLabel, 0);
-        Grid.SetColumn(_customMinutes, 1);
-        customRow.Children.Add(_customLabel);
-        customRow.Children.Add(_customMinutes);
-        _customEditorPanel.Children.Add(customRow);
-
-        Grid.SetColumn(_customEditorPanel, 0);
-        Grid.SetColumnSpan(_customEditorPanel, 2);
-        Grid.SetRow(_customEditorPanel, 1);
+        _customEditorPanel.Children.Add(_customLabel);
+        _customEditorPanel.Children.Add(_customMinutes);
+        _customEditorPanel.Children.Add(_minutesUnit);
         setup.Children.Add(_customEditorPanel);
 
         setupCard.Child = setup;
@@ -306,9 +312,10 @@ public sealed class FocusPage : Page
         _accent = color;
         if (!_pageReady) return;
         _progress.Foreground = new SolidColorBrush(color);
-        Ui.ApplyComboAccent(_preset, color);
         _start.Background = new SolidColorBrush(color);
-        _start.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        // The dark accent is a light blue: white text on it is nearly unreadable.
+        _start.Foreground = new SolidColorBrush(ThemeManager.OnAccent(color));
+        RefreshPresetVisuals();
     }
 
     public void ApplyLanguage(LanguageMode language)
@@ -330,9 +337,10 @@ public sealed class FocusPage : Page
         _resume.Content = en ? "Resume" : hant ? "繼續" : "继续";
         _stop.Content = en ? "End" : hant ? "結束" : "结束";
 
-        _durationLabel.Text = en ? "Focus duration" : hant ? "專注時長" : "专注时长";
-        _customLabel.Text = en ? "Custom duration" : hant ? "自訂時長" : "自定义时长";
-        _customMinutes.PlaceholderText = en ? "Minutes" : hant ? "分鐘" : "分钟";
+        _durationLabel.Text = en ? "Focus duration (minutes)" : hant ? "專注時長（分鐘）" : "专注时长（分钟）";
+        _customLabel.Text = en ? "Custom" : hant ? "自訂" : "自定义";
+        _minutesUnit.Text = en ? "minutes" : hant ? "分鐘" : "分钟";
+        _customMinutes.PlaceholderText = en ? "1–1440" : hant ? "1–1440" : "1–1440";
         _historyTitle.Text = en ? "Recent focus history" : hant ? "最近專注歷史" : "最近专注历史";
         _viewAllHistory.Content = en ? "View all" : hant ? "查看全部" : "查看全部";
         _tips.Text = en
@@ -342,7 +350,7 @@ public sealed class FocusPage : Page
                 : "专注时间与屏幕使用时间分开记录。锁定 Windows、长时间无操作或全局暂停使用时间记录时，不会继续累计专注时间。";
 
         SetMetricLabels(en, hant);
-        RebuildPresets(en, hant);
+        RefreshPresetVisuals();
         UpdateCustomVisibility();
         UpdateStateText(_lastFocusActive, false, false);
     }
@@ -354,24 +362,52 @@ public sealed class FocusPage : Page
         _pausesLabel.Text = en ? "Pauses today" : hant ? "今日暫停" : "今日暂停";
     }
 
-    private void RebuildPresets(bool en, bool hant)
+    private void RefreshPresetVisuals()
     {
-        var selectedSeconds = SelectedDurationSeconds();
-        _preset.Items.Clear();
-        var options = new[] { 15, 25, 30, 45, 60, 90, 120 };
-        foreach (var minutes in options)
-            _preset.Items.Add(new ComboBoxItem { Content = en ? $"{minutes} minutes" : hant ? $"{minutes} 分鐘" : $"{minutes} 分钟", Tag = minutes * 60 });
-        _preset.Items.Add(new ComboBoxItem { Content = en ? "Custom" : hant ? "自訂" : "自定义", Tag = 0 });
-        var index = -1;
-        for (var i = 0; i < options.Length; i++)
-            if (options[i] * 60 == selectedSeconds) { index = i; break; }
-        _preset.SelectedIndex = index >= 0 ? index : options.Length;
-        if (index < 0 && string.IsNullOrWhiteSpace(_customMinutes.Text))
-            _customMinutes.Text = Math.Clamp(selectedSeconds / 60, 1, 1440).ToString();
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        var onAccent = ThemeManager.OnAccent(_accent);
+        for (var i = 0; i < _presetButtons.Count; i++)
+        {
+            var button = _presetButtons[i];
+            var label = (TextBlock)button.Tag!;
+            label.Text = i == CustomIndex
+                ? (en ? "Custom" : hant ? "自訂" : "自定义")
+                : PresetMinutes[i].ToString();
+            var selected = i == _selectedPreset;
+            label.FontWeight = selected
+                ? Microsoft.UI.Text.FontWeights.SemiBold
+                : Microsoft.UI.Text.FontWeights.Normal;
+
+            if (selected)
+            {
+                button.Background = new SolidColorBrush(_accent);
+                button.Foreground = new SolidColorBrush(onAccent);
+                // Keep the stock pointer states inside the same accent family:
+                // otherwise hovering the selected chip flashes WinUI grey.
+                button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(_accent);
+                button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(_accent);
+                button.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(onAccent);
+                button.Resources["ButtonForegroundPressed"] = new SolidColorBrush(onAccent);
+            }
+            else
+            {
+                button.ClearValue(Control.BackgroundProperty);
+                button.ClearValue(Control.ForegroundProperty);
+                button.Resources = new ResourceDictionary();
+            }
+        }
     }
 
-    private bool IsCustomSelected()
-        => _preset.SelectedItem is ComboBoxItem item && item.Tag is int seconds && seconds == 0;
+    private void SelectPreset(int index)
+    {
+        if (index == _selectedPreset) return;
+        _selectedPreset = index;
+        RefreshPresetVisuals();
+        OnPresetChanged();
+    }
+
+    private bool IsCustomSelected() => _selectedPreset == CustomIndex;
 
     private int? TryGetCustomDurationSeconds()
     {
@@ -382,8 +418,8 @@ public sealed class FocusPage : Page
 
     private int SelectedDurationSeconds()
     {
-        if (_preset.SelectedItem is ComboBoxItem item && item.Tag is int seconds && seconds > 0)
-            return seconds;
+        if (_selectedPreset >= 0 && _selectedPreset < PresetMinutes.Length)
+            return PresetMinutes[_selectedPreset] * 60;
         return TryGetCustomDurationSeconds() ?? 25 * 60;
     }
 

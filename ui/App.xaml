@@ -8,8 +8,8 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <SolidColorBrush x:Key="ScreenTimeAccentBrush" Color="#4F8CFF" />
-            <SolidColorBrush x:Key="ScreenTimeAccentSubtleBrush" Color="#334F8CFF" />
+            <SolidColorBrush x:Key="ScreenTimeAccentBrush" Color="#0078D4" />
+            <SolidColorBrush x:Key="ScreenTimeAccentSubtleBrush" Color="#330078D4" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

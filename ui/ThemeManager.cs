@@ -5,84 +5,132 @@ using Windows.UI;
 namespace ScreenTimeRS.UI;
 
 /// <summary>
-/// Applies the monochrome interface accent: black on the light theme, white on
-/// the dark theme. ScreenTime RS no longer offers a colour picker, so this is
-/// the only accent source and it still has to refresh the Fluent resources that
-/// controls have already materialised.
+/// One accent for the whole app: the classic Windows blue on the light theme
+/// and a lighter tint on dark. The app deliberately does NOT follow the Windows
+/// personalisation colour; every accent brush the Fluent controls read is
+/// overridden here, including the ones resolved inside popups.
 /// </summary>
 public static class ThemeManager
 {
-    public static readonly Color DefaultAccent = Color.FromArgb(255, 0, 120, 212);
+    public static readonly Color LightAccent = Color.FromArgb(255, 0x00, 0x78, 0xD4);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 0x4C, 0xC2, 0xFF);
+    public static readonly Color DefaultAccent = LightAccent;
 
-    // One data accent for the whole app: the classic Windows blue on light, a
-    // lighter tint on dark so bars and indicators keep their contrast. The
-    // interface chrome stays neutral grey; colour is reserved for data and
-    // interactive state.
     public static Color AccentFor(ElementTheme theme) =>
-        theme == ElementTheme.Dark
-            ? Color.FromArgb(255, 76, 194, 255)
-            : Color.FromArgb(255, 0, 120, 212);
+        theme == ElementTheme.Dark ? DarkAccent : LightAccent;
 
-    public static void ApplyAccent(Color accent)
+    /// <summary>Readable foreground for a control filled with <paramref name="accent"/>.</summary>
+    public static Color OnAccent(Color accent) =>
+        IsLight(accent) ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+
+    /// <param name="current">The accent for the theme that is active right now.
+    /// It is used for the app-level brushes read directly by our own code.</param>
+    public static void ApplyAccent(Color current)
     {
         var resources = Application.Current.Resources;
-        resources["ScreenTimeAccentBrush"] = new SolidColorBrush(accent);
-        resources["ScreenTimeAccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(52, accent.R, accent.G, accent.B));
+        resources["ScreenTimeAccentBrush"] = new SolidColorBrush(current);
+        resources["ScreenTimeAccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(52, current.R, current.G, current.B));
 
-        // Dropdown items live inside a Popup, which is a separate visual tree:
-        // element-level resources never reach them, and app-level entries lose to
-        // the framework theme dictionaries. Writing the pill brush into our own
-        // Light/Dark dictionaries is the only place that wins for popups.
-        foreach (var themeKey in new object[] { "Light", "Dark", "HighContrast" })
+        WriteAccent(resources, current);
+
+        // ComboBox items and ContentDialog buttons live in a Popup, and the
+        // NavigationView indicator is a ThemeResource. Both resolve from theme
+        // dictionaries, where a plain application-level key never wins. Each
+        // dictionary gets its OWN fixed colour: writing the current accent into
+        // all three is what made the light theme show the dark tint after a
+        // theme switch. HighContrast is left to Windows.
+        foreach (var (key, color) in new[] { ("Light", LightAccent), ("Dark", DarkAccent) })
         {
-            if (!resources.ThemeDictionaries.TryGetValue(themeKey, out var existing) || existing is not ResourceDictionary dictionary)
+            if (!resources.ThemeDictionaries.TryGetValue(key, out var existing) || existing is not ResourceDictionary dictionary)
             {
                 dictionary = new ResourceDictionary();
-                resources.ThemeDictionaries[themeKey] = dictionary;
+                resources.ThemeDictionaries[key] = dictionary;
             }
-            dictionary["ComboBoxItemPillFillBrush"] = new SolidColorBrush(accent);
+            WriteAccent(dictionary, color);
         }
-
-        // Override the standard WinUI accent color resources so Fluent controls
-        // follow the monochrome accent instead of the Windows system colour.
-        resources["SystemAccentColor"] = accent;
-        resources["SystemAccentColorLight1"] = Mix(accent, Microsoft.UI.Colors.White, .22);
-        resources["SystemAccentColorLight2"] = Mix(accent, Microsoft.UI.Colors.White, .42);
-        resources["SystemAccentColorLight3"] = Mix(accent, Microsoft.UI.Colors.White, .68);
-        resources["SystemAccentColorDark1"] = Mix(accent, Microsoft.UI.Colors.Black, .18);
-        resources["SystemAccentColorDark2"] = Mix(accent, Microsoft.UI.Colors.Black, .36);
-        resources["SystemAccentColorDark3"] = Mix(accent, Microsoft.UI.Colors.Black, .54);
-        var accentBrush = new SolidColorBrush(accent);
-        var accentLight = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.White, .22));
-        var accentMid = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.White, .42));
-        var accentDark = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.Black, .18));
-
-        resources["SystemControlHighlightAccentBrush"] = accentBrush;
-
-        resources["AccentFillColorSelectedTextBackgroundBrush"] = accentBrush;
-        resources["AccentFillColorDefaultBrush"] = accentMid;
-        resources["AccentFillColorSecondaryBrush"] = accentLight;
-        resources["AccentFillColorTertiaryBrush"] = new SolidColorBrush(Mix(accent, Microsoft.UI.Colors.White, .62));
-        resources["AccentTextFillColorPrimaryBrush"] = accentDark;
-        resources["AccentTextFillColorSecondaryBrush"] = accentDark;
-        resources["AccentTextFillColorTertiaryBrush"] = accentMid;
-
-        // Only the selection indicator is overridden. Everything else about the
-        // selected item keeps the stock WinUI styling, but without this line the
-        // indicator falls back to the Windows system accent and shows up as an
-        // unrelated colour beside a monochrome interface.
-        resources["NavigationViewSelectionIndicatorForeground"] = accentBrush;
-        resources["CheckBoxCheckBackgroundFillOn"] = accentBrush;
-        resources["CheckBoxCheckBackgroundFillOnPointerOver"] = accentLight;
-        resources["CheckBoxCheckBackgroundFillOnPressed"] = accentDark;
-        resources["RadioButtonOuterEllipseCheckedFill"] = accentBrush;
-        resources["ToggleSwitchFillOn"] = accentBrush;
-        resources["SliderTrackValueFill"] = accentBrush;
-        resources["ProgressBarIndicatorForeground"] = accentBrush;
-        resources["ProgressBarIndicatorForegroundPointerOver"] = accentBrush;
-        resources["ProgressBarTrackFill"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
-
     }
+
+    /// <summary>
+    /// Writes the same set of keys into any resource scope. Keeping this in one
+    /// place is what guarantees that the navigation indicator, the tab
+    /// underline, the dropdown pill and the dialog buttons end up identical.
+    /// </summary>
+    static void WriteAccent(ResourceDictionary resources, Color accent)
+    {
+        var hover = Mix(accent, Microsoft.UI.Colors.White, .18);
+        var pressed = Mix(accent, Microsoft.UI.Colors.White, .34);
+        var dark = Mix(accent, Microsoft.UI.Colors.Black, .16);
+        var onAccent = OnAccent(accent);
+
+        // Colour resources that framework brushes derive from.
+        resources["SystemAccentColor"] = accent;
+        resources["SystemAccentColorLight1"] = hover;
+        resources["SystemAccentColorLight2"] = pressed;
+        resources["SystemAccentColorLight3"] = Mix(accent, Microsoft.UI.Colors.White, .62);
+        resources["SystemAccentColorDark1"] = dark;
+        resources["SystemAccentColorDark2"] = Mix(accent, Microsoft.UI.Colors.Black, .34);
+        resources["SystemAccentColorDark3"] = Mix(accent, Microsoft.UI.Colors.Black, .52);
+
+        var fill = new SolidColorBrush(accent);
+        var onFill = new SolidColorBrush(onAccent);
+
+        // Filled accent controls (AccentButtonStyle, ContentDialog default button,
+        // ToggleSwitch, CheckBox, Slider, ProgressBar).
+        resources["AccentFillColorDefaultBrush"] = fill;
+        resources["AccentFillColorSecondaryBrush"] = new SolidColorBrush(hover);
+        resources["AccentFillColorTertiaryBrush"] = new SolidColorBrush(pressed);
+        resources["AccentFillColorDisabledBrush"] = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B));
+        resources["AccentFillColorSelectedTextBackgroundBrush"] = fill;
+        resources["AccentTextFillColorPrimaryBrush"] = fill;
+        resources["AccentTextFillColorSecondaryBrush"] = fill;
+        resources["AccentTextFillColorTertiaryBrush"] = new SolidColorBrush(dark);
+        resources["TextOnAccentFillColorPrimaryBrush"] = onFill;
+        resources["TextOnAccentFillColorSecondaryBrush"] = onFill;
+        resources["TextOnAccentFillColorDisabledBrush"] = onFill;
+
+        // AccentButtonStyle (used by a ContentDialog's default button) reads
+        // these keys through ThemeResource. They are StaticResource aliases
+        // created when XamlControlsResources loads, so replacing
+        // AccentFillColorDefaultBrush afterwards leaves the button holding the
+        // original Windows accent brush. These keys have to be replaced too.
+        var disabledFill = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B));
+        resources["AccentButtonBackground"] = fill;
+        resources["AccentButtonBackgroundPointerOver"] = new SolidColorBrush(hover);
+        resources["AccentButtonBackgroundPressed"] = new SolidColorBrush(pressed);
+        resources["AccentButtonBackgroundDisabled"] = disabledFill;
+        resources["AccentButtonForeground"] = onFill;
+        resources["AccentButtonForegroundPointerOver"] = onFill;
+        resources["AccentButtonForegroundPressed"] = onFill;
+        resources["AccentButtonForegroundDisabled"] = onFill;
+        resources["AccentButtonBorderBrush"] = fill;
+        resources["AccentButtonBorderBrushPointerOver"] = new SolidColorBrush(hover);
+        resources["AccentButtonBorderBrushPressed"] = new SolidColorBrush(pressed);
+        resources["AccentButtonBorderBrushDisabled"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+
+        // Legacy keys still referenced by some control templates.
+        resources["SystemControlHighlightAccentBrush"] = fill;
+        resources["SystemControlBackgroundAccentBrush"] = fill;
+        resources["SystemControlForegroundAccentBrush"] = fill;
+        resources["SystemControlHighlightListAccentHighBrush"] = fill;
+        resources["SystemControlHighlightListAccentMediumBrush"] = fill;
+        resources["SystemControlHighlightListAccentLowBrush"] = fill;
+
+        // Selection / state indicators.
+        resources["NavigationViewSelectionIndicatorForeground"] = fill;
+        resources["ComboBoxItemPillFillBrush"] = fill;
+        resources["CheckBoxCheckBackgroundFillOn"] = fill;
+        resources["CheckBoxCheckBackgroundFillOnPointerOver"] = new SolidColorBrush(hover);
+        resources["CheckBoxCheckBackgroundFillOnPressed"] = new SolidColorBrush(dark);
+        resources["RadioButtonOuterEllipseCheckedFill"] = fill;
+        resources["ToggleSwitchFillOn"] = fill;
+        resources["SliderTrackValueFill"] = fill;
+        resources["ProgressBarIndicatorForeground"] = fill;
+        resources["ProgressBarIndicatorForegroundPointerOver"] = fill;
+        resources["ProgressBarTrackFill"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
+    }
+
+    static bool IsLight(Color color) =>
+        (color.R * 299 + color.G * 587 + color.B * 114) / 1000 > 140;
 
     static Color Mix(Color a, Color b, double amount)
     {

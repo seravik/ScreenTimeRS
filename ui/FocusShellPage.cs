@@ -13,7 +13,16 @@ namespace ScreenTimeRS.UI;
 public sealed class FocusShellPage : Page
 {
     private readonly SegmentedTabs _tabs = new();
-    private readonly ContentControl _focusHost = new();
+    // A bare ContentControl aligns its content to the left and gives it only its
+    // desired width. That made the whole timer page occupy a narrow column with
+    // an unexplained empty strip on the right. Stretch it on both axes.
+    private readonly ContentControl _focusHost = new()
+    {
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        VerticalAlignment = VerticalAlignment.Stretch,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        VerticalContentAlignment = VerticalAlignment.Stretch
+    };
     private readonly Func<UIElement> _focusFactory;
     private readonly FocusHistoryPage _history;
     private LanguageMode _language = LanguageMode.SimplifiedChinese;
