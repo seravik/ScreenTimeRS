@@ -1776,31 +1776,20 @@ public sealed class SettingsPage : Page
     readonly Grid startupToggle;
     bool startupEnabled;
     readonly ComboBox theme, language;
-    ColorPicker colorPicker = null!;
     readonly TextBlock pageTitle, generalTitle, appearanceTitle, startupText, languageTitle, aboutText;
     readonly TextBlock dataSectionTitle, legalSectionTitle, aboutTitle;
     readonly TextBlock themeModeLabel, languageModeLabel, legalHint, dataCardTitle;
-    readonly TextBlock paletteTitle, customColorTitle, accentHint, dataHint;
+    readonly TextBlock dataHint;
     readonly TextBlock dataLocationTitle, dataLocationText, dataLocationHint;
     readonly TextBlock monitoringTitle, monitoringHint, dangerTitle, dangerHint, diagnosticsTitle, diagnosticsHint;
     readonly Button exportDataButton, importDataButton, deleteAllDataButton, openDataFolderButton, pauseButton, backupButton, diagnosticsButton;
-    readonly Expander themeColorsExpander;
-    readonly StackPanel themeContent;
-    readonly Grid colorPickerHost;
-    readonly Border colorSpectrumInputSurface;
-    readonly Border colorSpectrumTooltip;
-    readonly TextBlock colorSpectrumTooltipText;
     readonly Button termsButton;
-    readonly Button[] paletteButtons = new Button[7];
     readonly Grid rootGrid;
     readonly ScrollViewer scroll;
     readonly Button[] sectionChips = new Button[3];
     readonly FrameworkElement[] sectionAnchors;
-    ColorSpectrum? colorSpectrum;
-    bool colorSpectrumPointerDown;
     bool updatingTheme;
     bool updatingLanguage;
-    bool updatingColor;
     LanguageMode _language;
     LanguageMode _languagePreference;
     UIColor _accentColor;
@@ -1809,7 +1798,6 @@ public sealed class SettingsPage : Page
 
     public event EventHandler<ThemeMode>? ThemeModeChanged;
     public event EventHandler<LanguageMode>? LanguageChanged;
-    public event EventHandler<UIColor>? AccentColorChanged;
     public event EventHandler? ExportDataRequested;
     public event EventHandler? ImportDataRequested;
     public event EventHandler? DeleteAllDataRequested;
@@ -1833,8 +1821,6 @@ public sealed class SettingsPage : Page
         var generalPanel = new StackPanel { Spacing = 24 };
         var dataPanel = new StackPanel { Spacing = 24 };
         var aboutPanel = new StackPanel { Spacing = 24 };
-        dataPanel.Children.Add(CreateSectionDivider());
-        aboutPanel.Children.Add(CreateSectionDivider());
 
         pageTitle = new TextBlock
         {
@@ -1904,98 +1890,6 @@ public sealed class SettingsPage : Page
         theme.SelectionChanged += Theme_SelectionChanged;
         ApplyComboBoxAccent(theme, _accentColor);
         generalPanel.Children.Add(theme);
-
-        paletteTitle = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-
-        var palette = new Grid { ColumnSpacing = 10 };
-        for (int i = 0; i < paletteButtons.Length; i++)
-        {
-            palette.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
-            var index = i;
-            var button = new Button
-            {
-                Width = 52,
-                Height = 52,
-                Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(26),
-                BorderThickness = new Thickness(2),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            button.Click += (_, _) => SelectPreset(index);
-            Grid.SetColumn(button, i);
-            palette.Children.Add(button);
-            paletteButtons[i] = button;
-        }
-
-        customColorTitle = new TextBlock
-        {
-            FontSize = 15,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        accentHint = new TextBlock { FontSize = 12, Opacity = .65, TextWrapping = TextWrapping.Wrap };
-
-        themeContent = new StackPanel { Spacing = 8, Padding = new Thickness(14, 4, 14, 14) };
-
-        colorPickerHost = new Grid();
-        colorSpectrumInputSurface = new Border
-        {
-            Background = new SolidColorBrush(UIColor.FromArgb(1, 255, 255, 255)),
-            BorderThickness = new Thickness(0),
-            Visibility = Visibility.Collapsed,
-            IsHitTestVisible = true,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Width = 0,
-            Height = 0
-        };
-        colorSpectrumInputSurface.PointerEntered += ColorSpectrumInput_PointerEntered;
-        colorSpectrumInputSurface.PointerMoved += ColorSpectrumInput_PointerMoved;
-        colorSpectrumInputSurface.PointerPressed += ColorSpectrumInput_PointerPressed;
-        colorSpectrumInputSurface.PointerReleased += ColorSpectrumInput_PointerReleased;
-        colorSpectrumInputSurface.PointerExited += ColorSpectrumInput_PointerExited;
-        colorSpectrumInputSurface.PointerCaptureLost += ColorSpectrumInput_PointerCaptureLost;
-
-        colorSpectrumTooltipText = new TextBlock
-        {
-            FontSize = 18,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        colorSpectrumTooltip = new Border
-        {
-            Background = new SolidColorBrush(UIColor.FromArgb(248, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(UIColor.FromArgb(80, 120, 120, 120)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(16, 9, 16, 9),
-            MinWidth = 78,
-            Visibility = Visibility.Collapsed,
-            IsHitTestVisible = false,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Child = colorSpectrumTooltipText,
-            RenderTransform = new TranslateTransform()
-        };
-
-        colorPickerHost.Children.Add(colorSpectrumInputSurface);
-        colorPickerHost.Children.Add(colorSpectrumTooltip);
-        CreateColorPicker();
-
-        themeContent.Children.Add(paletteTitle);
-        themeContent.Children.Add(palette);
-        themeContent.Children.Add(customColorTitle);
-        themeContent.Children.Add(accentHint);
-        themeContent.Children.Add(colorPickerHost);
-
-        themeColorsExpander = new Expander
-        {
-            IsExpanded = false,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(0),
-            Content = themeContent
-        };
-        generalPanel.Children.Add(CreateSettingsCard(themeColorsExpander));
 
         // Language
         languageTitle = new TextBlock
@@ -2207,8 +2101,6 @@ public sealed class SettingsPage : Page
 
         SetLanguage(languageMode, LanguageResolver.Resolve(languageMode));
         SetThemeMode(mode);
-        UpdatePaletteVisuals();
-        LocalizeColorPickerText();
     }
 
     private static Border CreateSettingsCard(UIElement content) => new()
@@ -2227,14 +2119,6 @@ public sealed class SettingsPage : Page
         CornerRadius = new CornerRadius(8),
         Background = new SolidColorBrush(UIColor.FromArgb(12, 196, 43, 28)),
         Child = content,
-        HorizontalAlignment = HorizontalAlignment.Stretch
-    };
-
-    private static Border CreateSectionDivider() => new()
-    {
-        Height = 1,
-        Margin = new Thickness(0, 4, 0, 4),
-        Background = new SolidColorBrush(UIColor.FromArgb(38, 128, 128, 128)),
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
 
@@ -2354,368 +2238,6 @@ public sealed class SettingsPage : Page
         catch { }
     }
 
-    private void CreateColorPicker()
-    {
-        colorPicker = new ColorPicker
-        {
-            Color = _accentColor,
-            IsMoreButtonVisible = true,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            ColorSpectrumComponents = ColorSpectrumComponents.HueSaturation,
-            Language = _language == LanguageMode.English ? "en-US" : _language == LanguageMode.TraditionalChinese ? "zh-TW" : "zh-CN"
-        };
-
-        colorPickerHost.Children.Insert(0, colorPicker);
-        colorPicker.ColorChanged += ColorPicker_ColorChanged;
-        colorPicker.Loaded += (_, _) =>
-        {
-            LocalizeColorPickerText();
-            BindColorSpectrumInteraction();
-        };
-        colorPicker.SizeChanged += (_, _) =>
-        {
-            LocalizeColorPickerText();
-            UpdateColorSpectrumInteractionBounds();
-        };
-    }
-
-    private void BindColorSpectrumInteraction()
-    {
-        var spectrum = FindVisualChild<ColorSpectrum>(colorPicker);
-        if (spectrum is null) return;
-
-        if (!ReferenceEquals(colorSpectrum, spectrum))
-        {
-            if (colorSpectrum is not null)
-                colorSpectrum.SizeChanged -= ColorSpectrum_SizeChanged;
-
-            colorSpectrum = spectrum;
-            colorSpectrum.IsHitTestVisible = false;
-            colorSpectrum.SizeChanged += ColorSpectrum_SizeChanged;
-        }
-
-        UpdateColorSpectrumInteractionBounds();
-    }
-
-    private void ColorSpectrum_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        UpdateColorSpectrumInteractionBounds();
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject? root) where T : DependencyObject
-    {
-        if (root is null) return null;
-        if (root is T match) return match;
-
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (int i = 0; i < count; i++)
-        {
-            var found = FindVisualChild<T>(VisualTreeHelper.GetChild(root, i));
-            if (found is not null) return found;
-        }
-        return null;
-    }
-
-    private void UpdateColorSpectrumInteractionBounds()
-    {
-        if (colorSpectrum is null || !colorSpectrum.IsLoaded || colorSpectrum.ActualWidth <= 1 || colorSpectrum.ActualHeight <= 1)
-        {
-            colorSpectrumInputSurface.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        try
-        {
-            var origin = colorSpectrum.TransformToVisual(colorPickerHost)
-                .TransformPoint(new Windows.Foundation.Point(0, 0));
-
-            colorSpectrumInputSurface.Margin = new Thickness(origin.X, origin.Y, 0, 0);
-            colorSpectrumInputSurface.Width = colorSpectrum.ActualWidth;
-            colorSpectrumInputSurface.Height = colorSpectrum.ActualHeight;
-            colorSpectrumInputSurface.Visibility = Visibility.Visible;
-        }
-        catch
-        {
-            colorSpectrumInputSurface.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void ColorSpectrumInput_PointerEntered(object sender, PointerRoutedEventArgs e)
-    {
-        UpdateSpectrumPointer(e, commit: false);
-    }
-
-    private void ColorSpectrumInput_PointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        UpdateSpectrumPointer(e, commit: colorSpectrumPointerDown);
-
-        var point = e.GetCurrentPoint(colorSpectrumInputSurface);
-        if (colorSpectrumPointerDown || point.Properties.IsLeftButtonPressed)
-            e.Handled = true;
-    }
-
-    private void ColorSpectrumInput_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        var point = e.GetCurrentPoint(colorSpectrumInputSurface);
-        if (!point.Properties.IsLeftButtonPressed) return;
-
-        colorSpectrumPointerDown = true;
-        colorSpectrumInputSurface.CapturePointer(e.Pointer);
-        UpdateSpectrumPointer(e, commit: true);
-        e.Handled = true;
-    }
-
-    private void ColorSpectrumInput_PointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        // Only a pointer sequence started by our left-button handler may commit
-        // a color. This also prevents right-click release events from selecting.
-        if (colorSpectrumPointerDown)
-            UpdateSpectrumPointer(e, commit: true);
-
-        colorSpectrumPointerDown = false;
-        colorSpectrumInputSurface.ReleasePointerCaptures();
-        e.Handled = true;
-    }
-
-    private void ColorSpectrumInput_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        if (!colorSpectrumPointerDown)
-            HideColorSpectrumTooltip();
-    }
-
-    private void ColorSpectrumInput_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        colorSpectrumPointerDown = false;
-        HideColorSpectrumTooltip();
-    }
-
-    private void UpdateSpectrumPointer(PointerRoutedEventArgs e, bool commit)
-    {
-        if (colorSpectrum is null || colorSpectrum.ActualWidth <= 1 || colorSpectrum.ActualHeight <= 1)
-            return;
-
-        var point = e.GetCurrentPoint(colorSpectrumInputSurface).Position;
-        point = new Windows.Foundation.Point(
-            Math.Clamp(point.X, 0, colorSpectrumInputSurface.ActualWidth),
-            Math.Clamp(point.Y, 0, colorSpectrumInputSurface.ActualHeight));
-
-        var hue = point.X / colorSpectrumInputSurface.ActualWidth * 360.0;
-        var saturation = 1.0 - point.Y / colorSpectrumInputSurface.ActualHeight;
-        var text = GetLocalizedSpectrumColorName(hue, saturation, 1.0, _language);
-
-        UpdateColorSpectrumTooltipTheme();
-        colorSpectrumTooltipText.Text = text;
-        colorSpectrumTooltip.Visibility = Visibility.Visible;
-        PositionColorSpectrumTooltip(point);
-
-        if (commit)
-        {
-            var selected = HsvToColor(hue, saturation, 1.0);
-            if (!ColorsEqual(colorPicker.Color, selected))
-                colorPicker.Color = selected;
-        }
-    }
-
-    private void PositionColorSpectrumTooltip(Windows.Foundation.Point point)
-    {
-        if (colorSpectrum is null || colorSpectrumTooltip.Visibility != Visibility.Visible)
-            return;
-
-        var tooltipOffsetX = 16.0;
-        var tooltipOffsetY = 16.0;
-        var x = point.X + tooltipOffsetX;
-        var y = point.Y + tooltipOffsetY;
-
-        colorSpectrumTooltip.Measure(new Windows.Foundation.Size(
-            double.PositiveInfinity, double.PositiveInfinity));
-        var size = colorSpectrumTooltip.DesiredSize;
-        var maxX = Math.Max(0, colorSpectrumInputSurface.ActualWidth - size.Width);
-        var maxY = Math.Max(0, colorSpectrumInputSurface.ActualHeight - size.Height);
-        x = Math.Clamp(x, 0, maxX);
-        y = Math.Clamp(y, 0, maxY);
-
-        if (colorSpectrumTooltip.RenderTransform is TranslateTransform transform)
-        {
-            transform.X = x;
-            transform.Y = y;
-        }
-    }
-
-    private void UpdateColorSpectrumTooltipTheme()
-    {
-        var dark = colorPickerHost.ActualTheme == ElementTheme.Dark;
-        colorSpectrumTooltip.Background = new SolidColorBrush(
-            dark
-                ? UIColor.FromArgb(244, 45, 45, 45)
-                : UIColor.FromArgb(248, 255, 255, 255));
-        colorSpectrumTooltip.BorderBrush = new SolidColorBrush(
-            dark
-                ? UIColor.FromArgb(95, 255, 255, 255)
-                : UIColor.FromArgb(80, 120, 120, 120));
-        colorSpectrumTooltipText.Foreground = new SolidColorBrush(
-            dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
-    }
-
-    private void HideColorSpectrumTooltip()
-    {
-        colorSpectrumTooltip.Visibility = Visibility.Collapsed;
-    }
-
-    private static bool ColorsEqual(UIColor left, UIColor right) =>
-        left.A == right.A && left.R == right.R && left.G == right.G && left.B == right.B;
-
-    private static UIColor HsvToColor(double hue, double saturation, double value)
-    {
-        hue = ((hue % 360) + 360) % 360;
-        saturation = Math.Clamp(saturation, 0, 1);
-        value = Math.Clamp(value, 0, 1);
-
-        var c = value * saturation;
-        var x = c * (1 - Math.Abs((hue / 60.0 % 2) - 1));
-        var m = value - c;
-        double r, g, b;
-
-        if (hue < 60) (r, g, b) = (c, x, 0);
-        else if (hue < 120) (r, g, b) = (x, c, 0);
-        else if (hue < 180) (r, g, b) = (0, c, x);
-        else if (hue < 240) (r, g, b) = (0, x, c);
-        else if (hue < 300) (r, g, b) = (x, 0, c);
-        else (r, g, b) = (c, 0, x);
-
-        return UIColor.FromArgb(
-            255,
-            (byte)Math.Round((r + m) * 255),
-            (byte)Math.Round((g + m) * 255),
-            (byte)Math.Round((b + m) * 255));
-    }
-
-    private static string GetLocalizedSpectrumColorName(double hue, double saturation, double value, LanguageMode language)
-    {
-        var en = language == LanguageMode.English;
-        var hant = language == LanguageMode.TraditionalChinese;
-        string zh(string s, string t) => hant ? t : s;
-        if (value < 0.16) return en ? "Black" : zh("黑色", "黑色");
-        if (saturation < 0.08)
-            return value > 0.85 ? (en ? "White" : zh("白色", "白色")) : (en ? "Gray" : zh("灰色", "灰色"));
-        if (hue < 15 || hue >= 345) return en ? "Red" : zh("红色", "紅色");
-        if (hue < 45) return en ? "Orange" : zh("橙色", "橙色");
-        if (hue < 75) return en ? "Yellow" : zh("黄色", "黃色");
-        if (hue < 165) return en ? "Green" : zh("绿色", "綠色");
-        if (hue < 195) return en ? "Cyan" : zh("青色", "青色");
-        if (hue < 255) return en ? "Blue" : zh("蓝色", "藍色");
-        if (hue < 285) return en ? "Purple" : zh("紫色", "紫色");
-        if (hue < 330) return en ? "Magenta" : zh("洋红色", "洋紅色");
-        return en ? "Pink" : zh("粉色", "粉紅色");
-    }
-
-    private void LocalizeColorPickerText()
-    {
-        if (colorPicker is null) return;
-
-        var en = _language == LanguageMode.English;
-        var hant = _language == LanguageMode.TraditionalChinese;
-        colorPicker.Language = en ? "en-US" : hant ? "zh-TW" : "zh-CN";
-        var labels = en
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["更多"] = "More", ["更多功能"] = "More", ["More"] = "More",
-                ["更少"] = "Less", ["Less"] = "Less",
-                ["红色"] = "Red", ["紅色"] = "Red", ["Red"] = "Red",
-                ["绿色"] = "Green", ["綠色"] = "Green", ["Green"] = "Green",
-                ["蓝色"] = "Blue", ["藍色"] = "Blue", ["Blue"] = "Blue",
-                ["青色"] = "Cyan", ["Cyan"] = "Cyan", ["紫色"] = "Purple", ["Purple"] = "Purple",
-                ["洋红色"] = "Magenta", ["洋紅色"] = "Magenta", ["Magenta"] = "Magenta",
-                ["粉色"] = "Pink", ["粉紅色"] = "Pink", ["Pink"] = "Pink",
-                ["橙色"] = "Orange", ["Orange"] = "Orange",
-                ["黄色"] = "Yellow", ["黃色"] = "Yellow", ["Yellow"] = "Yellow",
-                ["白色"] = "White", ["White"] = "White", ["灰色"] = "Gray", ["Gray"] = "Gray",
-                ["黑色"] = "Black", ["Black"] = "Black",
-                ["浅蓝色"] = "Light blue", ["淺藍色"] = "Light blue", ["Light blue"] = "Light blue",
-                ["浅绿色"] = "Light green", ["淺綠色"] = "Light green", ["Light green"] = "Light green",
-                ["色调"] = "Hue", ["色調"] = "Hue", ["色相"] = "Hue", ["Hue"] = "Hue",
-                ["饱和度"] = "Saturation", ["飽和度"] = "Saturation", ["Saturation"] = "Saturation",
-                ["值"] = "Value", ["明度"] = "Value", ["Value"] = "Value",
-                ["透明度"] = "Alpha", ["Alpha"] = "Alpha",
-                ["十六进制"] = "Hex", ["十六進位"] = "Hex", ["十六進制"] = "Hex", ["Hex"] = "Hex",
-                ["颜色"] = "Color", ["顏色"] = "Color", ["Color"] = "Color"
-            }
-            : hant
-                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    // Also normalize Simplified/English remnants so switching from Simplified
-                    // Chinese to Traditional Chinese cannot leave mixed-locale ColorPicker labels.
-                    ["更多"] = "更多", ["More"] = "更多", ["更少"] = "更少", ["Less"] = "更少",
-                    ["紅色"] = "紅色", ["红色"] = "紅色", ["Red"] = "紅色",
-                    ["綠色"] = "綠色", ["绿色"] = "綠色", ["Green"] = "綠色",
-                    ["藍色"] = "藍色", ["蓝色"] = "藍色", ["Blue"] = "藍色",
-                    ["青色"] = "青色", ["Cyan"] = "青色", ["紫色"] = "紫色", ["Purple"] = "紫色",
-                    ["洋紅色"] = "洋紅色", ["洋红色"] = "洋紅色", ["Magenta"] = "洋紅色",
-                    ["粉紅色"] = "粉紅色", ["粉色"] = "粉紅色", ["Pink"] = "粉紅色",
-                    ["橙色"] = "橙色", ["Orange"] = "橙色",
-                    ["黄色"] = "黃色", ["黃色"] = "黃色", ["Yellow"] = "黃色",
-                    ["白色"] = "白色", ["White"] = "白色", ["灰色"] = "灰色", ["Gray"] = "灰色",
-                    ["黑色"] = "黑色", ["Black"] = "黑色",
-                    ["浅蓝色"] = "淺藍色", ["淺藍色"] = "淺藍色", ["Light blue"] = "淺藍色",
-                    ["浅绿色"] = "淺綠色", ["淺綠色"] = "淺綠色", ["Light green"] = "淺綠色",
-                    ["色调"] = "色相", ["色調"] = "色相", ["Hue"] = "色相",
-                    ["饱和度"] = "飽和度", ["飽和度"] = "飽和度", ["Saturation"] = "飽和度",
-                    ["值"] = "明度", ["明度"] = "明度", ["Value"] = "明度",
-                    ["透明度"] = "透明度", ["Alpha"] = "透明度",
-                    ["十六进制"] = "十六進位", ["十六進位"] = "十六進位", ["Hex"] = "十六進位",
-                    ["颜色"] = "顏色", ["顏色"] = "顏色", ["Color"] = "顏色"
-                }
-                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    // WinUI ColorPicker can retain labels from the previous UI locale when the
-                    // control is already materialized. Map both English and Traditional Chinese
-                    // source labels so switching to Simplified Chinese always produces Simplified
-                    // Chinese text instead of a mix of locales.
-                    ["More"] = "更多", ["更多"] = "更多", ["更少"] = "更少", ["Less"] = "更少",
-                    ["Red"] = "红色", ["红色"] = "红色", ["紅色"] = "红色",
-                    ["Green"] = "绿色", ["绿色"] = "绿色", ["綠色"] = "绿色",
-                    ["Blue"] = "蓝色", ["蓝色"] = "蓝色", ["藍色"] = "蓝色",
-                    ["Cyan"] = "青色", ["青色"] = "青色",
-                    ["Purple"] = "紫色", ["紫色"] = "紫色",
-                    ["Magenta"] = "洋红色", ["洋红色"] = "洋红色", ["洋紅色"] = "洋红色",
-                    ["Pink"] = "粉色", ["粉色"] = "粉色", ["粉紅色"] = "粉色",
-                    ["Orange"] = "橙色", ["橙色"] = "橙色",
-                    ["Yellow"] = "黄色", ["黄色"] = "黄色", ["黃色"] = "黄色",
-                    ["White"] = "白色", ["白色"] = "白色",
-                    ["Gray"] = "灰色", ["灰色"] = "灰色",
-                    ["Black"] = "黑色", ["黑色"] = "黑色",
-                    ["Light blue"] = "浅蓝色", ["浅蓝色"] = "浅蓝色", ["淺藍色"] = "浅蓝色",
-                    ["Light green"] = "浅绿色", ["浅绿色"] = "浅绿色", ["淺綠色"] = "浅绿色",
-                    ["Hue"] = "色调", ["色调"] = "色调", ["色調"] = "色调",
-                    ["Saturation"] = "饱和度", ["饱和度"] = "饱和度", ["飽和度"] = "饱和度",
-                    ["Value"] = "值", ["值"] = "值", ["明度"] = "值",
-                    ["Alpha"] = "透明度", ["透明度"] = "透明度",
-                    ["Hex"] = "十六进制", ["十六进制"] = "十六进制", ["十六進位"] = "十六进制", ["十六進制"] = "十六进制",
-                    ["Color"] = "颜色", ["颜色"] = "颜色", ["顏色"] = "颜色"
-                };
-
-        ReplaceColorPickerStrings(colorPicker, labels);
-    }
-
-    private static void ReplaceColorPickerStrings(DependencyObject root, Dictionary<string, string> labels)
-    {
-        if (root is TextBlock textBlock)
-        {
-            var text = textBlock.Text?.Trim();
-            if (!string.IsNullOrEmpty(text) && labels.TryGetValue(text, out var translated))
-                textBlock.Text = translated;
-        }
-        else if (root is ContentControl contentControl && contentControl.Content is string content)
-        {
-            var text = content.Trim();
-            if (!string.IsNullOrEmpty(text) && labels.TryGetValue(text, out var translated))
-                contentControl.Content = translated;
-        }
-
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (int i = 0; i < count; i++)
-            ReplaceColorPickerStrings(VisualTreeHelper.GetChild(root, i), labels);
-    }
-
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (updatingTheme || theme.SelectedIndex < 0) return;
@@ -2730,48 +2252,12 @@ public sealed class SettingsPage : Page
         LanguageChanged?.Invoke(this, _languagePreference);
     }
 
-    private void ColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
-    {
-        if (updatingColor) return;
-        _accentColor = args.NewColor;
-        UpdatePaletteVisuals();
-        AccentColorChanged?.Invoke(this, _accentColor);
-    }
-
-    private void SelectPreset(int index)
-    {
-        _accentColor = ThemeManager.PresetColors[index];
-        updatingColor = true;
-        colorPicker.Color = _accentColor;
-        updatingColor = false;
-        UpdatePaletteVisuals();
-        AccentColorChanged?.Invoke(this, _accentColor);
-    }
-
-    private void UpdatePaletteVisuals()
-    {
-        for (int i = 0; i < paletteButtons.Length; i++)
-        {
-            var color = ThemeManager.PresetColors[i];
-            paletteButtons[i].Background = new SolidColorBrush(color);
-            paletteButtons[i].BorderBrush = new SolidColorBrush(
-                ThemeManager.IsClose(_accentColor, color) ? Microsoft.UI.Colors.White : UIColor.FromArgb(90, 255, 255, 255));
-            paletteButtons[i].Content = ThemeManager.IsClose(_accentColor, color) ? "✓" : "";
-            paletteButtons[i].Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-        }
-    }
-
     public void ApplyAccent(UIColor color)
     {
         _accentColor = color;
         ApplyStartupAccent(color);
         ApplyComboBoxAccent(theme, color);
         ApplyComboBoxAccent(language, color);
-        updatingColor = true;
-        colorPicker.Color = color;
-        updatingColor = false;
-        UpdatePaletteVisuals();
-        BindColorSpectrumInteraction();
         UpdateChipVisuals(_activeSection);
     }
 
@@ -2857,13 +2343,6 @@ public sealed class SettingsPage : Page
         generalTitle.Text = en ? "General" : hant ? "一般" : "常规";
         startupText.Text = en ? "Start ScreenTime RS silently in the background when I sign in to Windows" : hant ? "登入 Windows 後在背景靜默啟動 ScreenTime RS" : "登录 Windows 后在后台静默启动";
         appearanceTitle.Text = en ? "Appearance" : hant ? "外觀" : "外观";
-        themeColorsExpander.Header = en ? "Theme colors & custom color" : hant ? "主題色彩與自訂顏色" : "主题色彩与自定义颜色";
-        paletteTitle.Text = en ? "Preset colors" : hant ? "預設主題色" : "预设主题色";
-        customColorTitle.Text = en ? "Custom color" : hant ? "自訂顏色" : "自定义颜色";
-        accentHint.Text = en
-            ? "Choose a preset or pick any custom color. Changes apply immediately across the interface."
-            : hant ? "選擇預設主題色或自由取色，修改後會立即套用到整個介面。"
-            : "选择预设主题色或自由取色，修改后会立即应用到整个界面。";
         languageTitle.Text = en ? "Language" : hant ? "語言" : "语言";
         dataSectionTitle.Text = en ? "Data" : hant ? "資料" : "数据";
         themeModeLabel.Text = en ? "Theme" : hant ? "主題" : "主题";
@@ -2933,10 +2412,6 @@ public sealed class SettingsPage : Page
         }
         theme.SelectedIndex = Math.Clamp(themeIndex, 0, 2);
         updatingTheme = false;
-        UpdatePaletteVisuals();
-        LocalizeColorPickerText();
-        BindColorSpectrumInteraction();
-        HideColorSpectrumTooltip();
     }
 
     private async void TermsButton_Click(object sender, RoutedEventArgs e)

@@ -41,7 +41,6 @@ public sealed partial class MainWindow : Window
     private const string ThemeModeValue = "ThemeMode";
     private const string LanguageModeValue = "LanguageMode";
     private const string NavigationPaneLengthValue = "NavigationPaneLength";
-    private const string AccentColorValue = "AccentColor";
     private const string TermsAcceptedValue = "TermsAccepted_v0_9_2";
     private double _savedPaneLength = 320;
     private bool _resizingPane;
@@ -109,7 +108,7 @@ public sealed partial class MainWindow : Window
 
         _themeMode = LoadThemeMode();
         _languageMode = LoadLanguageMode();
-        var accent = LoadAccentColor();
+        var accent = CurrentAccent();
         ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
@@ -123,7 +122,6 @@ public sealed partial class MainWindow : Window
         _settingsPage = new SettingsPage(_themeMode, _languageMode, accent);
         _settingsPage.ThemeModeChanged += SettingsPage_ThemeModeChanged;
         _settingsPage.LanguageChanged += SettingsPage_LanguageChanged;
-        _settingsPage.AccentColorChanged += SettingsPage_AccentColorChanged;
         _settingsPage.ExportDataRequested += SettingsPage_ExportDataRequested;
         _settingsPage.ImportDataRequested += SettingsPage_ImportDataRequested;
         _settingsPage.DeleteAllDataRequested += SettingsPage_DeleteAllDataRequested;
@@ -187,9 +185,12 @@ public sealed partial class MainWindow : Window
 
     private void RootGrid_ActualThemeChanged(FrameworkElement sender, object args)
     {
-        ApplyAccent(LoadAccentColor());
+        ApplyAccent(CurrentAccent());
         ApplyTitleBarTheme();
     }
+
+    private Color CurrentAccent() =>
+        RootGrid.ActualTheme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
 
     private void ApplyTitleBarTheme()
     {
@@ -245,7 +246,7 @@ public sealed partial class MainWindow : Window
         };
 
         _settingsPage?.SetThemeMode(mode);
-        ApplyAccent(LoadAccentColor());
+        ApplyAccent(CurrentAccent());
         ApplyTitleBarTheme();
         UpdateNavigationResizeHandle();
     }
@@ -329,13 +330,6 @@ public sealed partial class MainWindow : Window
             var dialog = new ContentDialog { Title = en ? "Diagnostics" : hant ? "診斷信息" : "诊断信息", Content = new ScrollViewer { MaxHeight = 420, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } }, CloseButtonText = en ? "Close" : hant ? "關閉" : "关闭", XamlRoot = ContentFrame.XamlRoot };
             await dialog.ShowAsync();
         } catch { }
-    }
-
-    private void SettingsPage_AccentColorChanged(object? sender, Color color)
-    {
-        ApplyAccent(color);
-        SaveAccentColor(color);
-        ApplyTitleBarTheme();
     }
 
     private void ApplyAccent(Color color)
@@ -449,28 +443,6 @@ public sealed partial class MainWindow : Window
         resources["SystemControlHighlightListAccentLowBrush"] = lowBrush;
         resources["SystemControlHighlightListAccentMediumBrush"] = mediumBrush;
         resources["SystemControlHighlightListAccentHighBrush"] = highBrush;
-    }
-
-    private Color LoadAccentColor()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UserSettingsKey);
-            var value = key?.GetValue(AccentColorValue) as string;
-            if (ThemeManager.TryParseHex(value, out var color)) return color;
-        }
-        catch { }
-        return ThemeManager.DefaultAccent;
-    }
-
-    private static void SaveAccentColor(Color color)
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(UserSettingsKey);
-            key?.SetValue(AccentColorValue, ThemeManager.ToHex(color));
-        }
-        catch { }
     }
 
     private void SettingsPage_LanguageChanged(object? sender, LanguageMode language)
@@ -712,7 +684,7 @@ public sealed partial class MainWindow : Window
         try
         {
             _focusPage = new FocusPage(RunCollectorCommandAsync, LoadFocusHistoryAsync, NavigateToFocusHistory);
-            _focusPage.ApplyAccent(LoadAccentColor());
+            _focusPage.ApplyAccent(CurrentAccent());
             _focusPage.ApplyLanguage(UiLanguage);
             _focusContent = _focusPage;
             return _focusContent;

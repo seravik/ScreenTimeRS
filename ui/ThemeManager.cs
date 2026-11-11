@@ -1,25 +1,21 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using System;
-using System.Globalization;
 using Windows.UI;
 
 namespace ScreenTimeRS.UI;
 
+/// <summary>
+/// Applies the monochrome interface accent: black on the light theme, white on
+/// the dark theme. ScreenTime RS no longer offers a colour picker, so this is
+/// the only accent source and it still has to refresh the Fluent resources that
+/// controls have already materialised.
+/// </summary>
 public static class ThemeManager
 {
-    public static readonly Color DefaultAccent = Color.FromArgb(255, 79, 140, 255);
+    public static readonly Color DefaultAccent = Color.FromArgb(255, 0, 0, 0);
 
-    public static readonly Color[] PresetColors =
-    {
-        Color.FromArgb(255, 79, 140, 255),   // Ocean
-        Color.FromArgb(255, 139, 92, 246),  // Violet
-        Color.FromArgb(255, 34, 197, 94),   // Emerald
-        Color.FromArgb(255, 244, 91, 105),  // Rose
-        Color.FromArgb(255, 245, 166, 35),  // Amber
-        Color.FromArgb(255, 20, 184, 166),  // Teal
-        Color.FromArgb(255, 100, 116, 139)  // Slate
-    };
+    public static Color AccentFor(ElementTheme theme) =>
+        theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
 
     public static void ApplyAccent(Color accent)
     {
@@ -28,7 +24,7 @@ public static class ThemeManager
         resources["ScreenTimeAccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(52, accent.R, accent.G, accent.B));
 
         // Override the standard WinUI accent color resources so Fluent controls
-        // that use ThemeResource accent brushes follow the selected color too.
+        // follow the monochrome accent instead of the Windows system colour.
         resources["SystemAccentColor"] = accent;
         resources["SystemAccentColorLight1"] = Mix(accent, Microsoft.UI.Colors.White, .22);
         resources["SystemAccentColorLight2"] = Mix(accent, Microsoft.UI.Colors.White, .42);
@@ -48,11 +44,6 @@ public static class ThemeManager
         resources["SystemControlHighlightListAccentMediumBrush"] = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B));
         resources["SystemControlHighlightListAccentHighBrush"] = new SolidColorBrush(Color.FromArgb(145, accent.R, accent.G, accent.B));
 
-        // Modern Fluent/WinUI accent resources used by controls such as
-        // CheckBox, ComboBox and other selection states. Updating the
-        // SystemAccentColor alone is not sufficient when the control has
-        // already materialized its template, so keep the derived brushes in
-        // the app resource scope as well.
         resources["AccentFillColorSelectedTextBackgroundBrush"] = accentBrush;
         resources["AccentFillColorDefaultBrush"] = accentMid;
         resources["AccentFillColorSecondaryBrush"] = accentLight;
@@ -74,9 +65,6 @@ public static class ThemeManager
         resources["ProgressBarIndicatorForegroundPointerOver"] = accentBrush;
         resources["ProgressBarTrackFill"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
 
-        // ComboBox popup/selection resources. Without these the drop-down
-        // can keep the Windows default blue accent even when the app accent
-        // is a custom color.
         resources["ComboBoxItemPillFillBrush"] = accentBrush;
         resources["ComboBoxItemBackgroundSelected"] = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B));
         resources["ComboBoxItemBackgroundSelectedUnfocused"] = new SolidColorBrush(Color.FromArgb(34, accent.R, accent.G, accent.B));
@@ -88,28 +76,9 @@ public static class ThemeManager
         resources["ComboBoxSelectedPointerOverBackground"] = new SolidColorBrush(Color.FromArgb(56, accent.R, accent.G, accent.B));
     }
 
-    public static bool IsClose(Color a, Color b)
-    {
-        var d = Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B);
-        return d < 36;
-    }
-
-    public static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-
-    public static bool TryParseHex(string? value, out Color color)
-    {
-        color = DefaultAccent;
-        if (string.IsNullOrWhiteSpace(value)) return false;
-        var text = value.Trim().TrimStart('#');
-        if (text.Length != 6) return false;
-        if (!uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var n)) return false;
-        color = Color.FromArgb(255, (byte)(n >> 16), (byte)(n >> 8), (byte)n);
-        return true;
-    }
-
     static Color Mix(Color a, Color b, double amount)
     {
-        amount = Math.Clamp(amount, 0, 1);
+        amount = System.Math.Clamp(amount, 0, 1);
         return Color.FromArgb(255,
             (byte)(a.R + (b.R - a.R) * amount),
             (byte)(a.G + (b.G - a.G) * amount),
