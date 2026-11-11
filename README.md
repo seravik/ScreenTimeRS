@@ -1,6 +1,17 @@
-# ScreenTime RS v0.9.1
+# ScreenTime RS v0.9.2
 
 ScreenTime RS is a local Windows screen-time and application-usage tracker built with a **Rust monitoring core + WinUI 3 / Fluent UI**. Usage records are stored locally in SQLite and presented through the Windows desktop interface.
+
+## v0.9.2
+
+- Reorganized navigation into Overview, Usage, Focus, and Settings, with Settings moved to the bottom of the navigation pane.
+- Merged Statistics into Usage as a Trends tab and moved the full focus history into a Focus tab, removing the duplicated pages.
+- Reduced the Overview to today's figures plus a top-5 application list, and removed the duplicate 30-day chart.
+- Replaced the application-detail dialog with a side panel that follows the selected row.
+- Fixed the application usage share so it is measured against the selected range total.
+- Stopped charts and top-application bars from redrawing on every refresh.
+- Grouped Settings into General, Data, and About.
+- Rewrote the Terms of Use and Privacy Policy with clearer scope, data handling, retention, and liability terms. The acceptance flag is now version-specific, so the documents are presented again on first launch after upgrading.
 
 ## v0.9.1
 
@@ -29,12 +40,12 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 
 ## Core features
 
-- Today, yesterday, this week, and this month overview statistics.
+- Today's overview with active time, current and longest continuous use, unlock count, hourly distribution, and a top-5 application list.
 - Application usage ranges: Today, This week, This month, Last 6 months, Last year, All time, and Selected day.
-- Statistics ranges: Last 30 days, Last 90 days, Last 6 months, Last year, and All time.
+- Trend ranges: Last 30 days, Last 90 days, Last 6 months, Last year, and All time.
 - Daily usage charts, application rankings, and usage-share percentages.
 - Historical daily application usage that can be queried back to the oldest recorded data.
-- Application detail views with recorded daily history.
+- Master-detail application view with recorded daily history.
 - Windows idle and lock/session-state awareness.
 - CPU and memory monitoring.
 - Local SQLite storage with JSON export/import and automatic pre-import backup.
@@ -47,7 +58,7 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 ```text
 WinUI 3 / Fluent UI
         │
-        ├── snapshot.json   ← lightweight live state, refreshed every second
+        ├── snapshot.json   ← lightweight live state, written by the core every second
         └── analytics.json  ← cached historical ranges, refreshed periodically
         │
         ▼
@@ -90,7 +101,7 @@ dist\ui\screentime-rs.exe
 Output:
 
 ```text
-installer-output\ScreenTimeRS-v0.9.1-Setup.exe
+installer-output\ScreenTimeRS-v0.9.2-Setup.exe
 ```
 
 ## Usage-data backup
@@ -135,4 +146,5 @@ See [LICENSE](LICENSE).
 
 ## Version
 
-**v0.9.1**
+**v0.9.2**
+

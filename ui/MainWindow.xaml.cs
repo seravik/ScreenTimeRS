@@ -42,7 +42,7 @@ public sealed partial class MainWindow : Window
     private const string LanguageModeValue = "LanguageMode";
     private const string NavigationPaneLengthValue = "NavigationPaneLength";
     private const string AccentColorValue = "AccentColor";
-    private const string TermsAcceptedValue = "TermsAccepted_v0_9_0";
+    private const string TermsAcceptedValue = "TermsAccepted_v0_9_2";
     private double _savedPaneLength = 320;
     private bool _resizingPane;
     private Snapshot _latestSnapshot = new();

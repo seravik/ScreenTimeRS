@@ -2699,9 +2699,9 @@ public sealed class SettingsPage : Page
         diagnosticsButton.Content = en ? "Diagnostics" : hant ? "診斷" : "诊断";
         SetMonitoringState(_monitorPaused);
         aboutText.Text = en
-            ? "ScreenTime RS · Version 0.9.1 · Rust monitoring core + WinUI 3 / Fluent UI"
-            : hant ? "ScreenTime RS · 版本 0.9.1 · Rust 監控核心 + WinUI 3 / Fluent UI"
-            : "ScreenTime RS · 版本 0.9.1 · Rust monitoring core + WinUI 3 / Fluent UI";
+            ? "ScreenTime RS · Version 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI"
+            : hant ? "ScreenTime RS · 版本 0.9.2 · Rust 監控核心 + WinUI 3 / Fluent UI"
+            : "ScreenTime RS · 版本 0.9.2 · Rust monitoring core + WinUI 3 / Fluent UI";
 
         var themeIndex = theme.SelectedIndex;
         updatingTheme = true;
