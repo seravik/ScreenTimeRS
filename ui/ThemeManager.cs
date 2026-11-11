@@ -46,6 +46,12 @@ public static class ThemeManager
         resources["AccentTextFillColorPrimaryBrush"] = accentDark;
         resources["AccentTextFillColorSecondaryBrush"] = accentDark;
         resources["AccentTextFillColorTertiaryBrush"] = accentMid;
+
+        // Only the selection indicator is overridden. Everything else about the
+        // selected item keeps the stock WinUI styling, but without this line the
+        // indicator falls back to the Windows system accent and shows up as an
+        // unrelated colour beside a monochrome interface.
+        resources["NavigationViewSelectionIndicatorForeground"] = accentBrush;
         resources["CheckBoxCheckBackgroundFillOn"] = accentBrush;
         resources["CheckBoxCheckBackgroundFillOnPointerOver"] = accentLight;
         resources["CheckBoxCheckBackgroundFillOnPressed"] = accentDark;

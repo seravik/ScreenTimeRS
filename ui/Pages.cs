@@ -2236,6 +2236,10 @@ public sealed class SettingsPage : Page
         // follow the same accent color as the rest of the application.
         var accent = new SolidColorBrush(color);
         var border = new SolidColorBrush(ColorWithAlpha(color, 255));
+        // The accent turns white on the dark theme, so the tick has to switch to
+        // black or it disappears into the filled box.
+        var luminance = (color.R * 299 + color.G * 587 + color.B * 114) / 1000;
+        var tick = new SolidColorBrush(luminance > 140 ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White);
         startupBox.BorderBrush = border;
         startupBox.Background = startupEnabled ? accent : new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0));
         startupBox.Child = startupEnabled
@@ -2244,7 +2248,7 @@ public sealed class SettingsPage : Page
                 Text = "✓",
                 FontSize = 17,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                Foreground = tick,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
