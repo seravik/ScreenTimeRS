@@ -72,4 +72,4 @@ Because the Software does not transmit records off the device, no international 
 This Privacy Policy is versioned. Material changes to what is stored, how it is stored, or how it is used are reflected in a new version number and last-updated date, and are accompanied by an updated acceptance step in the Software where required. The version shipped with your installed release describes that release.
 
 ## 17. Contact
-ScreenTime RS is maintained at https://github.com/seravik/ScreenTimeRS, where questions and reports about data handling can be raised.
+ScreenTime RS is maintained at https://github.com/wuchen128/ScreenTimeRS, where questions and reports about data handling can be raised.

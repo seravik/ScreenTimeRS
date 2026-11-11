@@ -70,4 +70,4 @@ If any provision of these Terms is held unenforceable or invalid, it is limited 
 The English version of these Terms is the reference text. Simplified Chinese and Traditional Chinese versions are provided inside the application for convenience. If a translation conflicts with the English version, the English version controls, except where mandatory local law requires otherwise.
 
 ## 23. Contact
-The Project is maintained at https://github.com/seravik/ScreenTimeRS, where issues and enquiries can be raised. The Project does not guarantee a response time or a remedy for any particular report.
+The Project is maintained at https://github.com/wuchen128/ScreenTimeRS, where issues and enquiries can be raised. The Project does not guarantee a response time or a remedy for any particular report.

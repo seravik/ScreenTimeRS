@@ -109,7 +109,7 @@ If any provision of these Terms is held unenforceable or invalid, it is limited 
 The English version of these Terms is the reference text. Simplified Chinese and Traditional Chinese versions are provided inside the application for convenience. If a translation conflicts with the English version, the English version controls, except where mandatory local law requires otherwise.
 
 ## 23. Contact
-The Project is maintained at https://github.com/seravik/ScreenTimeRS, where issues and enquiries can be raised. The Project does not guarantee a response time or a remedy for any particular report.
+The Project is maintained at https://github.com/wuchen128/ScreenTimeRS, where issues and enquiries can be raised. The Project does not guarantee a response time or a remedy for any particular report.
 """;
 
     private const string PrivacyFallback = """
@@ -187,7 +187,7 @@ Because the Software does not transmit records off the device, no international 
 This Privacy Policy is versioned. Material changes to what is stored, how it is stored, or how it is used are reflected in a new version number and last-updated date, and are accompanied by an updated acceptance step in the Software where required. The version shipped with your installed release describes that release.
 
 ## 17. Contact
-ScreenTime RS is maintained at https://github.com/seravik/ScreenTimeRS, where questions and reports about data handling can be raised.
+ScreenTime RS is maintained at https://github.com/wuchen128/ScreenTimeRS, where questions and reports about data handling can be raised.
 """;
 
     private const string TermsZhCn = """
@@ -263,7 +263,7 @@ ScreenTime RS 名称、项目材料、源代码、文档、美术资源及其他
 本条款的英文版本为基准文本。简体中文与繁体中文版本在应用内提供，仅为方便阅读。若译文与英文版本存在冲突，以英文版本为准，但强制性当地法律另有要求的除外。
 
 ## 23. 联系
-本项目维护于 https://github.com/seravik/ScreenTimeRS，可在该处提出问题或反馈。本项目不保证响应时间，也不保证对任何具体反馈提供救济。
+本项目维护于 https://github.com/wuchen128/ScreenTimeRS，可在该处提出问题或反馈。本项目不保证响应时间，也不保证对任何具体反馈提供救济。
 """;
 
     private const string TermsZhTw = """
@@ -339,7 +339,7 @@ ScreenTime RS 名稱、專案素材、原始碼、文件、美術資源及其他
 本條款的英文版本為基準文本。簡體中文與繁體中文版本在應用程式內提供，僅為方便閱讀。若譯文與英文版本存在衝突，以英文版本為準，但強制性當地法律另有要求者除外。
 
 ## 23. 聯絡
-本專案維護於 https://github.com/seravik/ScreenTimeRS，可在該處提出問題或回饋。本專案不保證回應時間，也不保證對任何具體回饋提供救濟。
+本專案維護於 https://github.com/wuchen128/ScreenTimeRS，可在該處提出問題或回饋。本專案不保證回應時間，也不保證對任何具體回饋提供救濟。
 """;
 
     private const string PrivacyZhCn = """
@@ -417,7 +417,7 @@ Windows、安全软件、备份与同步工具、设备管理员以及同一设�
 本隐私政策带有版本。对存储内容、存储方式或使用目的的实质性变更，会体现为新的版本号与最后更新日期，并在需要时伴随本软件中更新的接受步骤。您所安装版本随附的文本描述该版本的做法。
 
 ## 17. 联系
-ScreenTime RS 维护于 https://github.com/seravik/ScreenTimeRS，可在该处提出有关数据处理的问题或反馈。
+ScreenTime RS 维护于 https://github.com/wuchen128/ScreenTimeRS，可在该处提出有关数据处理的问题或反馈。
 """;
 
     private const string PrivacyZhTw = """
@@ -495,7 +495,7 @@ Windows、安全性軟體、備份與同步工具、裝置管理員以及同一�
 本隱私權政策具有版本。對儲存內容、儲存方式或使用目的的實質性變更，會體現為新的版本號與最後更新日期，並在需要時伴隨本軟體中更新的接受步驟。您所安裝版本隨附的文字描述該版本的做法。
 
 ## 17. 聯絡
-ScreenTime RS 維護於 https://github.com/seravik/ScreenTimeRS，可在該處提出有關資料處理的問題或回饋。
+ScreenTime RS 維護於 https://github.com/wuchen128/ScreenTimeRS，可在該處提出有關資料處理的問題或回饋。
 """;
 
     public static string Terms(LanguageMode language)
