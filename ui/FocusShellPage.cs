@@ -12,29 +12,44 @@ namespace ScreenTimeRS.UI;
 /// </summary>
 public sealed class FocusShellPage : Page
 {
-    private readonly TabView _tabs = new()
-    {
-        IsAddTabButtonVisible = false,
-        TabWidthMode = TabViewWidthMode.SizeToContent
-    };
+    private readonly SegmentedTabs _tabs = new();
+    private readonly ContentControl _focusHost = new();
     private readonly Func<UIElement> _focusFactory;
     private readonly FocusHistoryPage _history;
     private LanguageMode _language = LanguageMode.SimplifiedChinese;
     private UIElement? _focusContent;
+    private int _selected;
 
     public FocusShellPage(Func<UIElement> focusFactory, FocusHistoryPage history)
     {
         _focusFactory = focusFactory;
         _history = history;
+        _history.Visibility = Visibility.Collapsed;
 
-        _tabs.TabItems.Add(new TabViewItem { IsClosable = false });
-        _tabs.TabItems.Add(new TabViewItem { Content = history, IsClosable = false });
-        _tabs.SelectionChanged += (_, _) =>
+        _tabs.AddTab("");
+        _tabs.AddTab("");
+        _tabs.SelectionChanged += (_, index) =>
         {
-            if (_tabs.SelectedIndex == 0) EnsureFocusContent();
-            UpdateHeaders();
+            if (index == 0) EnsureFocusContent();
+            Show(index);
         };
-        Content = _tabs;
+
+        var body = new Grid();
+        body.Children.Add(_focusHost);
+        body.Children.Add(_history);
+
+        var host = new Grid();
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(_tabs, 0);
+        Grid.SetRow(body, 1);
+        host.Children.Add(_tabs);
+        host.Children.Add(body);
+
+        Content = host;
+
+        EnsureFocusContent();
+        Show(0);
         UpdateHeaders();
     }
 
@@ -42,25 +57,25 @@ public sealed class FocusShellPage : Page
     /// construction that keeps a focus-page failure from breaking the shell.</summary>
     public void Activate()
     {
-        _tabs.SelectedIndex = 0;
         EnsureFocusContent();
+        Show(0);
     }
 
     public void SelectHistory()
     {
-        _tabs.SelectedIndex = 1;
+        Show(1);
         _history.Refresh();
     }
 
     public void SelectFocus()
     {
-        _tabs.SelectedIndex = 0;
+        Show(0);
         EnsureFocusContent();
     }
 
     public void UpdateSnapshot(Snapshot snapshot)
     {
-        if (_tabs.SelectedIndex == 0 && _focusContent is FocusPage page)
+        if (_selected == 0 && _focusContent is FocusPage page)
             page.UpdateSnapshot(snapshot);
     }
 
@@ -78,16 +93,23 @@ public sealed class FocusShellPage : Page
         if (_focusContent is FocusPage page)
             page.ApplyAccent(color);
         _history.ApplyAccent(color);
+        _tabs.SetAccent(color);
     }
 
-    private void EnsureFocusContent()
+    void Show(int index)
+    {
+        _selected = index;
+        _focusHost.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _history.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void EnsureFocusContent()
     {
         if (_focusContent is not null) return;
         try
         {
             _focusContent = _focusFactory();
-            if (_tabs.TabItems.Count > 0 && _tabs.TabItems[0] is TabViewItem timer)
-                timer.Content = _focusContent;
+            _focusHost.Content = _focusContent;
             if (_focusContent is FocusPage page)
                 page.ApplyLanguage(_language);
         }
@@ -97,14 +119,11 @@ public sealed class FocusShellPage : Page
         }
     }
 
-    private void UpdateHeaders()
+    void UpdateHeaders()
     {
         var en = _language == LanguageMode.English;
         var hant = _language == LanguageMode.TraditionalChinese;
-        if (_tabs.TabItems.Count < 2) return;
-        if (_tabs.TabItems[0] is TabViewItem timer)
-            timer.Header = en ? "Timer" : hant ? "計時" : "计时";
-        if (_tabs.TabItems[1] is TabViewItem history)
-            history.Header = en ? "History" : hant ? "歷史" : "历史";
+        _tabs.SetLabel(0, en ? "Timer" : hant ? "計時" : "计时");
+        _tabs.SetLabel(1, en ? "History" : hant ? "歷史" : "历史");
     }
 }

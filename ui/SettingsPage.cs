@@ -58,6 +58,7 @@ public sealed class SettingsPage : Page
         _appearanceHeading = Heading();
         _themeLabel = Ui.Caption("");
         _theme = new ComboBox { Width = 220 };
+        Ui.ApplyComboAccent(_theme, _accent);
         _theme.SelectionChanged += (_, _) =>
         {
             if (_updatingCombos || _theme.SelectedIndex < 0) return;
@@ -85,6 +86,7 @@ public sealed class SettingsPage : Page
 
         _languageLabel = Ui.Caption("");
         _language = new ComboBox { Width = 220 };
+        Ui.ApplyComboAccent(_language, _accent);
         _language.SelectionChanged += (_, _) =>
         {
             if (_updatingCombos || _language.SelectedIndex < 0) return;
@@ -287,6 +289,8 @@ public sealed class SettingsPage : Page
     public void ApplyAccent(UIColor color)
     {
         _accent = color;
+        Ui.ApplyComboAccent(_theme, color);
+        Ui.ApplyComboAccent(_language, color);
     }
 
     async System.Threading.Tasks.Task ShowTermsAsync()

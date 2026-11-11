@@ -21,7 +21,11 @@ public sealed class UsagePage : Page
     const double ChartHeight = 140;
 
     readonly Func<string[], Task<string?>> _query;
-    readonly TabView _tabs;
+    readonly Button _trendTab, _appsTab;
+    readonly TextBlock _trendTabText, _appsTabText;
+    Border _trendUnderline, _appsUnderline;
+    readonly ScrollViewer _trendScroll, _appsScroll;
+    bool _showTrends = true;
 
     readonly ComboBox _trendRange;
     readonly TextBlock[] _metricLabels = new TextBlock[4];
@@ -61,9 +65,9 @@ public sealed class UsagePage : Page
     public UsagePage(Func<string[], Task<string?>> query)
     {
         _query = query;
-        _tabs = new TabView { IsAddTabButtonVisible = false, TabWidthMode = TabViewWidthMode.SizeToContent };
 
         _trendRange = new ComboBox { Width = 200 };
+        Ui.ApplyComboAccent(_trendRange, _accent);
         _trendRange.SelectionChanged += async (_, _) => await OnTrendRangeChanged();
         _trendHint = Ui.Caption("");
 
@@ -142,6 +146,7 @@ public sealed class UsagePage : Page
         };
 
         _appRange = new ComboBox { Width = 200 };
+        Ui.ApplyComboAccent(_appRange, _accent);
         _appRange.SelectionChanged += (_, _) => OnAppRangeChanged();
         _appDate = new CalendarDatePicker { Width = 180, DateFormat = "{year.full}-{month.integer}/{day.integer}" };
         _appDate.DateChanged += (_, _) => OnAppRangeChanged();
@@ -200,11 +205,39 @@ public sealed class UsagePage : Page
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
 
-        _tabs.TabItems.Add(new TabViewItem { Content = trendScroll, IsClosable = false });
-        _tabs.TabItems.Add(new TabViewItem { Content = appsScroll, IsClosable = false });
-        _tabs.SelectionChanged += (_, _) => OnTabChanged();
+        _trendScroll = trendScroll;
+        _appsScroll = appsScroll;
 
-        Content = _tabs;
+        _trendTabText = new TextBlock { Text = "", FontSize = Ui.BodySize, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        _appsTabText = new TextBlock { Text = "", FontSize = Ui.BodySize, Opacity = .6 };
+
+        _trendTab = TabButton(_trendTabText, out _trendUnderline);
+        _appsTab = TabButton(_appsTabText, out _appsUnderline);
+        _trendTab.Click += (_, _) => SetTab(true);
+        _appsTab.Click += (_, _) => SetTab(false);
+
+        var tabBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 24,
+            Padding = new Thickness(28, 14, 28, 0)
+        };
+        tabBar.Children.Add(_trendTab);
+        tabBar.Children.Add(_appsTab);
+
+        _appsScroll.Visibility = Visibility.Collapsed;
+        var host = new Grid();
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(tabBar, 0);
+        Grid.SetRow(_trendScroll, 1);
+        Grid.SetRow(_appsScroll, 1);
+        host.Children.Add(tabBar);
+        host.Children.Add(_trendScroll);
+        host.Children.Add(_appsScroll);
+
+        Content = host;
+        ApplyTabVisuals();
 
         Loaded += async (_, _) =>
         {
@@ -239,11 +272,9 @@ public sealed class UsagePage : Page
         _appRange.SelectedIndex = Math.Clamp(appIndex, 0, 6);
         _updatingRange = false;
 
-        for (int i = 0; i < _tabs.TabItems.Count && i < 2; i++)
-        {
-            if (_tabs.TabItems[i] is TabViewItem tab)
-                tab.Header = i == 0 ? Str.Usage.TrendsTab(language) : Str.Usage.AppsTab(language);
-        }
+        _trendTabText.Text = Str.Usage.TrendsTab(language);
+        _appsTabText.Text = Str.Usage.AppsTab(language);
+        ApplyTabVisuals();
 
         _listSignature = "";
         RenderTrendChart();
@@ -253,6 +284,8 @@ public sealed class UsagePage : Page
     public void ApplyAccent(UIColor color)
     {
         _accent = color;
+        Ui.ApplyComboAccent(_trendRange, color);
+        Ui.ApplyComboAccent(_appRange, color);
         RenderTrendChart();
         _listSignature = "";
         RenderAppList();
@@ -261,24 +294,65 @@ public sealed class UsagePage : Page
     public void UpdateSnapshot(Snapshot snapshot)
     {
         _snapshot = snapshot;
-        if (_tabs.SelectedIndex == 0)
+        if (_showTrends)
             UpdateTrends();
         else
             RenderAppList();
     }
 
-    async void OnTabChanged()
+    static Button TabButton(TextBlock label, out Border underline)
     {
-        if (_tabs.SelectedIndex == 0)
+        underline = new Border
         {
-            await EnsureDailyAll();
-            UpdateTrends();
-        }
-        else
+            Height = 2,
+            CornerRadius = new CornerRadius(1),
+            Background = new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0)),
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        var stack = new StackPanel { Spacing = 0 };
+        stack.Children.Add(label);
+        stack.Children.Add(underline);
+        return new Button
         {
-            await EnsureAllRange();
-            RenderAppList();
-        }
+            Content = stack,
+            Padding = new Thickness(0, 4, 0, 6),
+            Background = new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0)),
+            BorderThickness = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+    }
+
+    void SetTab(bool trends)
+    {
+        if (_showTrends == trends)
+            return;
+        _showTrends = trends;
+        _trendScroll.Visibility = trends ? Visibility.Visible : Visibility.Collapsed;
+        _appsScroll.Visibility = trends ? Visibility.Collapsed : Visibility.Visible;
+        ApplyTabVisuals();
+        _ = trends ? LoadTrendsAsync() : LoadAppsAsync();
+    }
+
+    void ApplyTabVisuals()
+    {
+        _trendTabText.FontWeight = _showTrends ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        _appsTabText.FontWeight = _showTrends ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.SemiBold;
+        _trendTabText.Opacity = _showTrends ? 1 : .6;
+        _appsTabText.Opacity = _showTrends ? .6 : 1;
+        _trendUnderline.Background = new SolidColorBrush(_showTrends ? _accent : UIColor.FromArgb(0, 0, 0, 0));
+        _appsUnderline.Background = new SolidColorBrush(_showTrends ? UIColor.FromArgb(0, 0, 0, 0) : _accent);
+    }
+
+    async Task LoadTrendsAsync()
+    {
+        await EnsureDailyAll();
+        UpdateTrends();
+    }
+
+    async Task LoadAppsAsync()
+    {
+        await EnsureAllRange();
+        RenderAppList();
     }
 
     async Task EnsureDailyAll()
@@ -401,14 +475,14 @@ public sealed class UsagePage : Page
         {
             _chart.ColumnDefinitions.Add(new ColumnDefinition());
             var cell = new Grid();
+            var gap = days.Length <= 60 ? 3 : 0.5;
             var bar = new Border
             {
-                MinWidth = 2,
-                MaxWidth = 28,
                 Height = days[i].seconds <= 0 ? 0 : Math.Max(4, ChartHeight * days[i].seconds / (double)peak),
                 CornerRadius = new CornerRadius(2, 2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Bottom,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(gap, 0, gap, 0),
                 Background = Ui.Brush(_accent),
                 Opacity = .9
             };

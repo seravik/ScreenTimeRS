@@ -57,4 +57,15 @@ internal static class Ui
 
     public static SolidColorBrush Subtle(UIColor color, byte alpha) =>
         new(UIColor.FromArgb(alpha, color.R, color.G, color.B));
+
+    /// <summary>
+    /// The dropdown pill is defined inside the control's own theme dictionary, so
+    /// an application-level override loses to it on the light theme. Setting the
+    /// brush on the ComboBox instance is the only reliable way to keep it in the
+    /// app accent.
+    /// </summary>
+    public static void ApplyComboAccent(ComboBox combo, UIColor accent)
+    {
+        combo.Resources["ComboBoxItemPillFillBrush"] = new SolidColorBrush(accent);
+    }
 }

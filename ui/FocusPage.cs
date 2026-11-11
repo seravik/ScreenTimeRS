@@ -306,6 +306,7 @@ public sealed class FocusPage : Page
         _accent = color;
         if (!_pageReady) return;
         _progress.Foreground = new SolidColorBrush(color);
+        Ui.ApplyComboAccent(_preset, color);
         _start.Background = new SolidColorBrush(color);
         _start.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
     }

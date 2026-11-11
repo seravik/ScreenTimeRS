@@ -29,6 +29,20 @@ public static class ThemeManager
         resources["ScreenTimeAccentBrush"] = new SolidColorBrush(accent);
         resources["ScreenTimeAccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(52, accent.R, accent.G, accent.B));
 
+        // Dropdown items live inside a Popup, which is a separate visual tree:
+        // element-level resources never reach them, and app-level entries lose to
+        // the framework theme dictionaries. Writing the pill brush into our own
+        // Light/Dark dictionaries is the only place that wins for popups.
+        foreach (var themeKey in new object[] { "Light", "Dark", "HighContrast" })
+        {
+            if (!resources.ThemeDictionaries.TryGetValue(themeKey, out var existing) || existing is not ResourceDictionary dictionary)
+            {
+                dictionary = new ResourceDictionary();
+                resources.ThemeDictionaries[themeKey] = dictionary;
+            }
+            dictionary["ComboBoxItemPillFillBrush"] = new SolidColorBrush(accent);
+        }
+
         // Override the standard WinUI accent color resources so Fluent controls
         // follow the monochrome accent instead of the Windows system colour.
         resources["SystemAccentColor"] = accent;
