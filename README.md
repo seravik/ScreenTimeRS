@@ -50,7 +50,7 @@ ScreenTime RS is a local Windows screen-time and application-usage tracker built
 - CPU and memory monitoring.
 - Local SQLite storage with JSON export/import and automatic pre-import backup.
 - Windows system-tray support and optional background startup.
-- Light, dark, system, and custom accent-color themes.
+- Light, dark, and system themes with a single blue data accent.
 - Focus sessions with persistent countdowns, pause/resume, automatic inactivity pause, and focus history.
 
 ## Architecture
