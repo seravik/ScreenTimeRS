@@ -1827,13 +1827,14 @@ public sealed class SettingsPage : Page
         {
             Spacing = 40,
             Padding = new Thickness(28, 6, 28, 28),
-            MaxWidth = 860,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
 
         var generalPanel = new StackPanel { Spacing = 24 };
         var dataPanel = new StackPanel { Spacing = 24 };
         var aboutPanel = new StackPanel { Spacing = 24 };
+        dataPanel.Children.Add(CreateSectionDivider());
+        aboutPanel.Children.Add(CreateSectionDivider());
 
         pageTitle = new TextBlock
         {
@@ -2179,7 +2180,6 @@ public sealed class SettingsPage : Page
         {
             Spacing = 12,
             Padding = new Thickness(28, 24, 28, 10),
-            MaxWidth = 860,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         header.Children.Add(pageTitle);
@@ -2227,6 +2227,14 @@ public sealed class SettingsPage : Page
         CornerRadius = new CornerRadius(8),
         Background = new SolidColorBrush(UIColor.FromArgb(12, 196, 43, 28)),
         Child = content,
+        HorizontalAlignment = HorizontalAlignment.Stretch
+    };
+
+    private static Border CreateSectionDivider() => new()
+    {
+        Height = 1,
+        Margin = new Thickness(0, 4, 0, 4),
+        Background = new SolidColorBrush(UIColor.FromArgb(38, 128, 128, 128)),
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
 
