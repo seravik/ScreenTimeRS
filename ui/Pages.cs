@@ -606,6 +606,7 @@ public sealed class AppsPage : Page
     AppStat? _detailApp;
     AppHistoryResponse? _detailHistory;
     long _detailTotal;
+    long _rangeTotal;
 
     public AppsPage(
         Func<DateTime, Task>? loadDayUsageAsync = null,
@@ -709,7 +710,7 @@ public sealed class AppsPage : Page
 
         var contentGrid = new Grid { ColumnSpacing = 20 };
         contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
         Grid.SetColumn(listHost, 0);
         Grid.SetColumn(detailPanel, 1);
         contentGrid.Children.Add(listHost);
@@ -723,6 +724,7 @@ public sealed class AppsPage : Page
     }
 
     public int SelectedPeriodIndex => period.SelectedIndex;
+    public long RangeTotal => _rangeTotal;
     public DateTime? SelectedDay => datePicker.Date?.DateTime.Date;
     public long? SelectedDayTotal => _selectedDayData?.total_seconds;
     public long? AllTimeAppsTotal => period.SelectedIndex == 5 && _allTimeLoaded
@@ -825,7 +827,7 @@ public sealed class AppsPage : Page
         _language = language;
         var en = language == LanguageMode.English;
         var hant = language == LanguageMode.TraditionalChinese;
-        title.Text = en ? "App usage" : hant ? "應用程式使用時間" : "应用使用时间";
+        title.Text = en ? "Apps" : hant ? "應用程式" : "应用";
         search.PlaceholderText = en ? "Search apps" : hant ? "搜尋應用程式" : "搜索应用";
         detailPlaceholder.Text = en ? "Select an app to see details." : hant ? "選擇應用程式以查看詳情。" : "选择一个应用查看详情。";
         var index = Math.Clamp(period.SelectedIndex < 0 ? 0 : period.SelectedIndex, 0, 6);
@@ -925,6 +927,7 @@ public sealed class AppsPage : Page
             case 6: source = _selectedDayData?.apps ?? Array.Empty<AppStat>(); denominator = _selectedDayData?.total_seconds ?? source.Sum(x => Math.Max(0, x.seconds)); break;
             default: source = snapshot.apps; denominator = source.Sum(x => Math.Max(0, x.seconds)); break;
         }
+        _rangeTotal = denominator;
 
         var apps = source
             .Where(x => UiHelpers.FriendlyName(x, _language).Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase))
@@ -1174,13 +1177,13 @@ public sealed class AppsPage : Page
             var grid = new Grid { Padding = new Thickness(10), ColumnSpacing = 14 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
             icon = new WinUIImage { Width = 36, Height = 36, Stretch = Stretch.Uniform };
             Grid.SetColumn(icon, 0); grid.Children.Add(icon);
 
             var info = new StackPanel();
-            name = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+            name = new TextBlock { FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
             path = new TextBlock { Opacity = .55, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis };
             info.Children.Add(name); info.Children.Add(path);
             Grid.SetColumn(info, 1); grid.Children.Add(info);
@@ -1511,7 +1514,7 @@ public sealed class StatsPage : Page
         _language = language;
         var en = language == LanguageMode.English;
         var hant = language == LanguageMode.TraditionalChinese;
-        title.Text = en ? "Statistics" : hant ? "統計" : "统计";
+        title.Text = en ? "Trends" : hant ? "趨勢" : "趋势";
         description.Text = en
             ? "Review screen-time trends and application usage from the local history."
             : hant ? "查看本機歷史記錄中的使用時間趨勢與應用程式使用情況。"

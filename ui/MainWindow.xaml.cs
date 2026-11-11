@@ -1318,11 +1318,11 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var total = history.daily.Sum(x => Math.Max(0, x.seconds));
-            if (index == 6 && _appsPage.SelectedDayTotal is long selectedTotal)
-                total = selectedTotal;
-            else if (index == 5 && _appsPage.AllTimeAppsTotal is long allTimeTotal)
-                total = allTimeTotal;
+            // Share is relative to the whole selected range, not to this app's
+            // own total. AppsPage caches the range denominator while rendering.
+            var total = _appsPage.RangeTotal;
+            if (total <= 0)
+                total = history.daily.Sum(x => Math.Max(0, x.seconds));
 
             _appsPage.ShowDetails(history, app, total);
         }

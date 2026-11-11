@@ -20,6 +20,7 @@ public sealed class UsageShellPage : Page
     private readonly StatsPage _stats;
     private readonly AppsPage _apps;
     private LanguageMode _language = LanguageMode.SimplifiedChinese;
+    private Snapshot? _lastSnapshot;
 
     public UsageShellPage(StatsPage stats, AppsPage apps)
     {
@@ -28,12 +29,23 @@ public sealed class UsageShellPage : Page
 
         _tabs.TabItems.Add(new TabViewItem { Content = stats, IsClosable = false });
         _tabs.TabItems.Add(new TabViewItem { Content = apps, IsClosable = false });
-        _tabs.SelectionChanged += (_, _) => UpdateHeaders();
+        _tabs.SelectionChanged += (_, _) =>
+        {
+            UpdateHeaders();
+            if (_lastSnapshot is not null)
+                ApplySnapshotToCurrentTab(_lastSnapshot);
+        };
         Content = _tabs;
         UpdateHeaders();
     }
 
     public void UpdateSnapshot(Snapshot snapshot)
+    {
+        _lastSnapshot = snapshot;
+        ApplySnapshotToCurrentTab(snapshot);
+    }
+
+    private void ApplySnapshotToCurrentTab(Snapshot snapshot)
     {
         if (_tabs.SelectedIndex == 1)
             _apps.UpdateSnapshot(snapshot);
