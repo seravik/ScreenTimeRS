@@ -120,40 +120,44 @@ internal static class DataConfirmationCode
 
 public sealed class OverviewPage : Page
 {
-    readonly TextBlock[] values = new TextBlock[4];
-    readonly TextBlock[] cardTitles = new TextBlock[4];
-    readonly TextBlock[] cardSubs = new TextBlock[4];
+    readonly TextBlock todayValue, todayTitle, todaySub;
     readonly InfoBar status;
     readonly TextBlock pageTitle;
-    readonly TextBlock trendTitle;
-    readonly TextBlock trendSummary;
+    readonly Button pauseToggle;
     readonly TextBlock sessionValue, longestValue, unlockValue, hourlyTitle, hourlyHint;
     readonly TextBlock[] metricTitles = new TextBlock[3];
     readonly Border[] hourlyBars = new Border[24];
-    readonly Border[] trendBars = new Border[30];
-    readonly TextBlock[] trendLabels = new TextBlock[30];
     readonly Border hourlyHoverCard;
     readonly TextBlock hourlyHoverText;
-    readonly Border trendHoverCard;
-    readonly TextBlock trendHoverText;
+    readonly TextBlock topAppsTitle;
+    readonly StackPanel topApps;
+    readonly List<ProgressBar> topAppBars = new();
     int _hoveredHourlyIndex = -1;
-    int _hoveredTrendIndex = -1;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
     bool statusClosed;
 
+    public event Action? PauseToggleRequested;
+
     public OverviewPage()
     {
         var panel = new StackPanel { Spacing = 18, Padding = new Thickness(28) };
-        pageTitle = new TextBlock { FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        panel.Children.Add(pageTitle);
+        pageTitle = new TextBlock { FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        pauseToggle = new Button { VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(14, 6, 14, 6) };
+        pauseToggle.Click += (_, _) => PauseToggleRequested?.Invoke();
 
-        var cards = new Grid { ColumnSpacing = 14, RowSpacing = 14 };
-        for (int i = 0; i < 4; i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
-        AddCard(cards, 0, out values[0], out cardTitles[0], out cardSubs[0]);
-        AddCard(cards, 1, out values[1], out cardTitles[1], out cardSubs[1]);
-        AddCard(cards, 2, out values[2], out cardTitles[2], out cardSubs[2]);
-        AddCard(cards, 3, out values[3], out cardTitles[3], out cardSubs[3]);
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(pageTitle, 0);
+        Grid.SetColumn(pauseToggle, 1);
+        header.Children.Add(pageTitle);
+        header.Children.Add(pauseToggle);
+        panel.Children.Add(header);
+
+        var cards = new Grid();
+        cards.ColumnDefinitions.Add(new ColumnDefinition());
+        AddCard(cards, 0, out todayValue, out todayTitle, out todaySub);
         panel.Children.Add(cards);
 
         var metrics = new Grid { ColumnSpacing = 14 };
@@ -223,103 +227,26 @@ public sealed class OverviewPage : Page
         hourlyBorder.Child = hourlyPanel;
         panel.Children.Add(hourlyBorder);
 
-        status = new InfoBar { IsOpen = true, IsClosable = true };
-        status.Closed += (_, _) => statusClosed = true;
-        panel.Children.Add(status);
-
-        var trendBorder = new Border
+        var topBorder = new Border
         {
             Padding = new Thickness(20),
             CornerRadius = new CornerRadius(12),
             BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
             BorderThickness = new Thickness(1)
         };
-        var trendPanel = new StackPanel { Spacing = 10 };
-        trendTitle = new TextBlock { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        trendSummary = new TextBlock { FontSize = 12, Opacity = .65 };
-        trendPanel.Children.Add(trendTitle);
-        trendPanel.Children.Add(trendSummary);
+        var topPanel = new StackPanel { Spacing = 12 };
+        topAppsTitle = new TextBlock { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        topApps = new StackPanel { Spacing = 10 };
+        topPanel.Children.Add(topAppsTitle);
+        topPanel.Children.Add(topApps);
+        topBorder.Child = topPanel;
+        panel.Children.Add(topBorder);
 
-        var chartScroll = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            HorizontalScrollMode = ScrollMode.Enabled,
-            VerticalScrollMode = ScrollMode.Disabled
-        };
+        status = new InfoBar { IsOpen = true, IsClosable = true };
+        status.Closed += (_, _) => statusClosed = true;
+        panel.Children.Add(status);
 
-        var chartHost = new Grid { Height = 190, MinWidth = 1680 };
-        var chart = new Grid { Height = 190, ColumnSpacing = 8, MinWidth = 1680 };
-        var hoverCanvas = new Canvas { Height = 190, MinWidth = 1680, IsHitTestVisible = false };
 
-        for (int i = 0; i < 30; i++)
-        {
-            chart.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-
-            var day = new Grid
-            {
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-            var dayContent = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
-            var barArea = new Grid { Height = 145, VerticalAlignment = VerticalAlignment.Bottom };
-            var bar = new Border
-            {
-                Width = 24,
-                Height = 4,
-                CornerRadius = new CornerRadius(6),
-                Background = UiHelpers.AccentBrush(),
-                VerticalAlignment = VerticalAlignment.Bottom,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = .9
-            };
-            barArea.Children.Add(bar);
-
-            var label = new TextBlock
-            {
-                HorizontalAlignment = HorizontalAlignment.Center,
-                FontSize = 11,
-                Opacity = .68
-            };
-            dayContent.Children.Add(barArea);
-            dayContent.Children.Add(label);
-            day.Children.Add(dayContent);
-
-            int dayIndex = i;
-            day.PointerEntered += (_, _) => ShowTrendHover(dayIndex);
-            day.PointerMoved += (_, _) => ShowTrendHover(dayIndex);
-            day.PointerExited += (_, _) => HideTrendHover(dayIndex);
-
-            Grid.SetColumn(day, i);
-            chart.Children.Add(day);
-            trendBars[i] = bar;
-            trendLabels[i] = label;
-        }
-
-        chartHost.Children.Add(chart);
-        trendHoverText = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-            TextWrapping = TextWrapping.NoWrap
-        };
-        trendHoverCard = new Border
-        {
-            Child = trendHoverText,
-            Padding = new Thickness(10, 6, 10, 6),
-            CornerRadius = new CornerRadius(7),
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
-            BorderThickness = new Thickness(1),
-            Visibility = Visibility.Collapsed,
-            IsHitTestVisible = false
-        };
-        hoverCanvas.Children.Add(trendHoverCard);
-        chartHost.Children.Add(hoverCanvas);
-        chartScroll.Content = chartHost;
-        trendPanel.Children.Add(chartScroll);
-        trendBorder.Child = trendPanel;
-        panel.Children.Add(trendBorder);
 
         Content = new ScrollViewer { Content = panel };
     }
@@ -351,10 +278,10 @@ public sealed class OverviewPage : Page
     public void ApplyAccent(UIColor color)
     {
         var brush = new SolidColorBrush(color);
-        foreach (var bar in trendBars)
-            bar.Background = brush;
         foreach (var bar in hourlyBars)
             bar.Background = brush;
+        foreach (var bar in topAppBars)
+            bar.Foreground = brush;
 
         // InfoBar uses dedicated severity theme resources rather than the
         // generic accent resources. Override the success-state resources
@@ -379,18 +306,12 @@ public sealed class OverviewPage : Page
         var en = language == LanguageMode.English;
         var hant = language == LanguageMode.TraditionalChinese;
         pageTitle.Text = en ? "Overview" : hant ? "概覽" : "概览";
-        cardTitles[0].Text = en ? "Today" : hant ? "今天" : "今天";
-        cardTitles[1].Text = en ? "Yesterday" : hant ? "昨天" : "昨天";
-        cardTitles[2].Text = en ? "This week" : hant ? "本週" : "本周";
-        cardTitles[3].Text = en ? "This month" : hant ? "本月" : "本月";
-        cardSubs[0].Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
-        cardSubs[1].Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
-        cardSubs[2].Text = en ? "Monday to today" : hant ? "週一至今天" : "周一至今天";
-        cardSubs[3].Text = en ? "Accumulated this month" : hant ? "本月累計" : "本月累计";
+        todayTitle.Text = en ? "Today" : hant ? "今天" : "今天";
+        todaySub.Text = en ? "Active time" : hant ? "活躍時間" : "活跃时间";
         metricTitles[0].Text = en ? "Current continuous use" : hant ? "目前連續使用" : "当前连续使用";
         metricTitles[1].Text = en ? "Longest continuous use today" : hant ? "今日最長連續使用" : "今日最长连续使用";
         metricTitles[2].Text = en ? "Unlocks today" : hant ? "今日解鎖次數" : "今日解锁次数";
-        trendTitle.Text = en ? "Last 30 days" : hant ? "最近 30 天" : "最近 30 天";
+        topAppsTitle.Text = en ? "Today's top 5 apps" : hant ? "今日應用程式 Top 5" : "今日应用 Top 5";
         hourlyTitle.Text = en ? "Today by hour" : hant ? "今天每小時" : "今日按小时";
         hourlyHint.Text = "";
         UpdateSnapshot(_lastSnapshot ?? new Snapshot());
@@ -400,10 +321,13 @@ public sealed class OverviewPage : Page
     public void UpdateSnapshot(Snapshot s)
     {
         _lastSnapshot = s;
-        values[0].Text = UiHelpers.Format(s.today, _language);
-        values[1].Text = UiHelpers.Format(s.yesterday, _language);
-        values[2].Text = UiHelpers.Format(s.week, _language);
-        values[3].Text = UiHelpers.Format(s.month, _language);
+        todayValue.Text = UiHelpers.Format(s.today, _language);
+
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        pauseToggle.Content = s.paused
+            ? (en ? "Resume recording" : hant ? "繼續記錄" : "继续记录")
+            : (en ? "Pause recording" : hant ? "暫停記錄" : "暂停记录");
         sessionValue.Text = UiHelpers.Format(s.current_session_seconds, _language);
         longestValue.Text = UiHelpers.Format(s.longest_session_today, _language);
         unlockValue.Text = s.unlocks_today.ToString();
@@ -437,7 +361,7 @@ public sealed class OverviewPage : Page
         {
             status.Severity = InfoBarSeverity.Warning;
             status.Title = _language == LanguageMode.English ? "Recording paused" : _language == LanguageMode.TraditionalChinese ? "已暫停記錄" : "已暂停记录";
-            status.Message = _language == LanguageMode.English ? "Usage tracking is paused from Advanced settings." : _language == LanguageMode.TraditionalChinese ? "使用時間記錄已在進階設定中暫停。" : "使用时间记录已在高级设置中暂停。";
+            status.Message = _language == LanguageMode.English ? "Resume recording from the Overview header or Advanced settings." : _language == LanguageMode.TraditionalChinese ? "可在概覽頂部或進階設定中繼續記錄。" : "可在概览顶部或高级设置中继续记录。";
         }
         else if (s.locked)
         {
@@ -472,32 +396,68 @@ public sealed class OverviewPage : Page
         }
         if (!statusClosed) status.IsOpen = true;
 
-        var days = s.daily.TakeLast(30).ToArray();
-        var max = Math.Max(1, days.Select(x => x.seconds).DefaultIfEmpty(1).Max());
-        var total = days.Sum(x => x.seconds);
-        var average = days.Length == 0 ? 0 : total / days.Length;
-        trendSummary.Text = _language == LanguageMode.English
-            ? $"Total {UiHelpers.Format(total, _language)}  ·  Daily average {UiHelpers.Format(average, _language)}"
-            : _language == LanguageMode.TraditionalChinese ? $"30 天累計 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}" : $"30 天累计 {UiHelpers.Format(total, _language)}  ·  日均 {UiHelpers.Format(average, _language)}";
+        UpdateTopApps(s);
+    }
 
-        for (int i = 0; i < trendBars.Length; i++)
+    private void UpdateTopApps(Snapshot s)
+    {
+        topApps.Children.Clear();
+        topAppBars.Clear();
+
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+        var top = s.apps.Where(a => a.seconds > 0).OrderByDescending(a => a.seconds).Take(5).ToArray();
+        if (top.Length == 0)
         {
-            if (i < days.Length)
+            topApps.Children.Add(new TextBlock
             {
-                trendLabels[i].Text = days[i].label;
-                var fraction = Math.Clamp(days[i].seconds / (double)max, 0.0, 1.0);
-                trendBars[i].Height = Math.Max(4, 135 * fraction);
-            }
-            else
-            {
-                trendLabels[i].Text = "";
-                trendBars[i].Height = 4;
-            }
+                Text = en ? "No application usage recorded today." : hant ? "今天尚無應用程式使用記錄。" : "今天还没有应用使用记录。",
+                Opacity = .6,
+                TextWrapping = TextWrapping.Wrap
+            });
+            return;
         }
 
-        // Re-apply the in-page overlay after each refresh so a visible popup never blinks away.
-        if (_hoveredTrendIndex >= 0)
-            ShowTrendHover(_hoveredTrendIndex);
+        var max = Math.Max(1, top[0].seconds);
+        foreach (var app in top)
+        {
+            var row = new Grid { ColumnSpacing = 10 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var name = new TextBlock
+            {
+                Text = UiHelpers.FriendlyName(app, _language),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var time = new TextBlock
+            {
+                Text = UiHelpers.Format(app.seconds, _language),
+                Opacity = .65,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(name, 0);
+            Grid.SetColumn(time, 1);
+            row.Children.Add(name);
+            row.Children.Add(time);
+
+            var bar = new ProgressBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                Value = Math.Clamp(app.seconds * 100.0 / max, 0.0, 100.0),
+                Height = 4,
+                Foreground = UiHelpers.AccentBrush(),
+                Background = new SolidColorBrush(UIColor.FromArgb(28, 128, 128, 128))
+            };
+            var stack = new StackPanel { Spacing = 4 };
+            stack.Children.Add(row);
+            stack.Children.Add(bar);
+            topApps.Children.Add(stack);
+            topAppBars.Add(bar);
+        }
     }
 
     void ShowHourlyHover(int index)
@@ -546,36 +506,6 @@ public sealed class OverviewPage : Page
         {
             _hoveredHourlyIndex = -1;
             hourlyHoverCard.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    void ShowTrendHover(int index)
-    {
-        if (_lastSnapshot is null || index < 0 || index >= 30) return;
-
-        _hoveredTrendIndex = index;
-        var days = _lastSnapshot.daily.TakeLast(30).ToArray();
-        trendHoverText.Text = index < days.Length
-            ? (_language == LanguageMode.English
-                ? $"{days[index].label}: {UiHelpers.Format(days[index].seconds, _language)}"
-                : $"{days[index].label}：{UiHelpers.Format(days[index].seconds, _language)}")
-            : (_language == LanguageMode.English ? "No usage record" : _language == LanguageMode.TraditionalChinese ? "暫無使用記錄" : "暂无使用记录");
-
-        trendHoverCard.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        var popupWidth = trendHoverCard.DesiredSize.Width;
-        var left = index * 56.0 + 24.0 - (popupWidth / 2.0);
-        left = Math.Max(4, Math.Min(left, 1680 - popupWidth - 4));
-        Canvas.SetLeft(trendHoverCard, left);
-        Canvas.SetTop(trendHoverCard, 4);
-        trendHoverCard.Visibility = Visibility.Visible;
-    }
-
-    void HideTrendHover(int index)
-    {
-        if (_hoveredTrendIndex == index)
-        {
-            _hoveredTrendIndex = -1;
-            trendHoverCard.Visibility = Visibility.Collapsed;
         }
     }
 

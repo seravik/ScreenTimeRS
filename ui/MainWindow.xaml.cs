@@ -113,6 +113,7 @@ public sealed partial class MainWindow : Window
         ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
+        _overviewPage.PauseToggleRequested += TogglePause;
         _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
         _statsPage = new StatsPage(LoadStatsPeriodAsync);
         _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, () => { }, RefreshRecentFocusHistory);
@@ -288,11 +289,13 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void SettingsPage_PauseRequested(object? sender, EventArgs e)
+    private void SettingsPage_PauseRequested(object? sender, EventArgs e) => TogglePause();
+
+    private void TogglePause()
     {
         try
         {
-            var pausePath = _shutdownPath.Replace("shutdown.flag", "pause.flag");
+            var pausePath = Path.Combine(Path.GetDirectoryName(_shutdownPath)!, "pause.flag");
             if (File.Exists(pausePath)) File.Delete(pausePath); else File.WriteAllText(pausePath, "paused");
             File.WriteAllText(Path.Combine(Path.GetDirectoryName(pausePath)!, "refresh.flag"), "refresh");
         }
