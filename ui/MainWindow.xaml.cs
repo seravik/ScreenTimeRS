@@ -1275,109 +1275,58 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowAppDetailsAsync(AppStat app)
     {
-        var index = _appsPage.SelectedPeriodIndex;
-        var args = new List<string> { "--query-app", app.name };
-        if (index == 6 && _appsPage.SelectedDay is DateTime selectedDay)
+        try
         {
-            var date = selectedDay.ToString("yyyy-MM-dd");
-            args.Add(date);
-            args.Add(date);
-        }
-        else if (index != 5)
-        {
-            var today = DateTime.Today;
-            var start = index switch
+            var index = _appsPage.SelectedPeriodIndex;
+            var args = new List<string> { "--query-app", app.name };
+            if (index == 6 && _appsPage.SelectedDay is DateTime selectedDay)
             {
-                1 => today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1)),
-                2 => new DateTime(today.Year, today.Month, 1),
-                3 => today.AddMonths(-6),
-                4 => today.AddMonths(-12),
-                _ => today
-            };
-            args.Add(start.ToString("yyyy-MM-dd"));
-            args.Add(today.ToString("yyyy-MM-dd"));
-        }
-
-        var text = await RunCollectorQueryAsync(args.ToArray());
-        if (text is null) return;
-        AppHistoryResponse? history = null;
-        try { history = JsonSerializer.Deserialize<AppHistoryResponse>(text); } catch { }
-        if (history is null) return;
-
-        var total = history.daily.Sum(x => Math.Max(0, x.seconds));
-        if (index == 6 && _appsPage.SelectedDayTotal is long selectedTotal)
-            total = selectedTotal;
-        else if (index == 5 && _appsPage.AllTimeAppsTotal is long allTimeTotal)
-            total = allTimeTotal;
-
-        var dayRows = history.daily
-            .Where(x => x.seconds > 0)
-            .ToArray();
-        var list = new StackPanel { Spacing = 6 };
-        foreach (var day in dayRows)
-        {
-            var row = new Grid { ColumnSpacing = 12 };
-            row.ColumnDefinitions.Add(new ColumnDefinition());
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            row.Children.Add(new TextBlock { Text = FormatHistoryDate(day.label, UiLanguage), VerticalAlignment = VerticalAlignment.Center });
-            var value = new TextBlock
+                var date = selectedDay.ToString("yyyy-MM-dd");
+                args.Add(date);
+                args.Add(date);
+            }
+            else if (index != 5)
             {
-                Text = UiHelpers.Format(day.seconds, UiLanguage),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(value, 1);
-            row.Children.Add(value);
-            list.Children.Add(row);
+                var today = DateTime.Today;
+                var start = index switch
+                {
+                    1 => today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1)),
+                    2 => new DateTime(today.Year, today.Month, 1),
+                    3 => today.AddMonths(-6),
+                    4 => today.AddMonths(-12),
+                    _ => today
+                };
+                args.Add(start.ToString("yyyy-MM-dd"));
+                args.Add(today.ToString("yyyy-MM-dd"));
+            }
+
+            var text = await RunCollectorQueryAsync(args.ToArray());
+            if (text is null)
+            {
+                _appsPage.ShowDetailError();
+                return;
+            }
+
+            AppHistoryResponse? history = null;
+            try { history = JsonSerializer.Deserialize<AppHistoryResponse>(text); } catch { }
+            if (history is null)
+            {
+                _appsPage.ShowDetailError();
+                return;
+            }
+
+            var total = history.daily.Sum(x => Math.Max(0, x.seconds));
+            if (index == 6 && _appsPage.SelectedDayTotal is long selectedTotal)
+                total = selectedTotal;
+            else if (index == 5 && _appsPage.AllTimeAppsTotal is long allTimeTotal)
+                total = allTimeTotal;
+
+            _appsPage.ShowDetails(history, app, total);
         }
-        if (dayRows.Length == 0)
-            list.Children.Add(new TextBlock { Text = UiLanguage == LanguageMode.English ? "No usage recorded." : UiLanguage == LanguageMode.TraditionalChinese ? "暫無使用記錄。" : "暂无使用记录。" });
-
-        var header = new Grid { ColumnSpacing = 12 };
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
-        header.ColumnDefinitions.Add(new ColumnDefinition());
-        var icon = new Microsoft.UI.Xaml.Controls.Image { Width = 42, Height = 42, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform };
-        UiHelpers.SetAppIcon(icon, app);
-        header.Children.Add(icon);
-        var details = new StackPanel { Spacing = 2 };
-        details.Children.Add(new TextBlock { Text = UiHelpers.FriendlyName(app, UiLanguage), FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        var share = total > 0 ? history.total_seconds * 100.0 / total : 0;
-        details.Children.Add(new TextBlock { Text = UiLanguage == LanguageMode.English
-            ? $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  {share:F1}% of period"
-            : UiLanguage == LanguageMode.TraditionalChinese
-                ? $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  佔期間 {share:F1}%"
-                : $"{UiHelpers.Format(history.total_seconds, UiLanguage)}  ·  占期间 {share:F1}%", Opacity = .68 });
-        Grid.SetColumn(details, 1);
-        header.Children.Add(details);
-
-        var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(header);
-        content.Children.Add(new TextBlock
+        catch
         {
-            Text = UiLanguage == LanguageMode.English ? "Daily history" : UiLanguage == LanguageMode.TraditionalChinese ? "每日使用歷史" : "每日使用历史",
-            FontSize = 15,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        content.Children.Add(new ScrollViewer { Content = list, MaxHeight = 360, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-
-        var dialog = new ContentDialog
-        {
-            RequestedTheme = RootGrid.ActualTheme,
-            Title = UiHelpers.FriendlyName(app, UiLanguage),
-            Content = content,
-            CloseButtonText = UiText.Close(UiLanguage),
-            XamlRoot = ContentFrame.XamlRoot
-        };
-        await dialog.ShowAsync();
-    }
-
-    private static string FormatHistoryDate(string raw, LanguageMode language)
-    {
-        if (DateTime.TryParseExact(raw, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var day))
-        {
-            return language == LanguageMode.English ? day.ToString("MMM d, yyyy") : language == LanguageMode.TraditionalChinese ? day.ToString("yyyy年M月d日") : day.ToString("yyyy年M月d日");
+            _appsPage.ShowDetailError();
         }
-        return raw;
     }
 
     private async Task RefreshAfterDataChangeAsync()

@@ -587,6 +587,10 @@ public sealed class AppsPage : Page
     readonly TextBlock daySummary = new();
     readonly TextBlock emptyState = new();
     readonly TextBlock title = new();
+    readonly Border detailPanel = new();
+    readonly StackPanel detailContent = new();
+    readonly TextBlock detailPlaceholder = new();
+    string? _selectedKey;
     readonly Dictionary<string, AppRow> rows = new(StringComparer.OrdinalIgnoreCase);
     readonly Func<DateTime, Task>? _loadDayUsageAsync;
     readonly Func<AppStat, Task>? _showAppDetailsAsync;
@@ -671,8 +675,7 @@ public sealed class AppsPage : Page
         emptyState.TextAlignment = TextAlignment.Center;
         emptyState.VerticalAlignment = VerticalAlignment.Center;
         emptyState.Visibility = Visibility.Collapsed;
-        Grid.SetRow(emptyState, 2);
-        root.Children.Add(emptyState);
+        Grid.SetRow(emptyState, 0);
 
         var scroll = new ScrollViewer
         {
@@ -680,8 +683,36 @@ public sealed class AppsPage : Page
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Grid.SetRow(scroll, 2);
-        root.Children.Add(scroll);
+
+        var listHost = new Grid();
+        listHost.Children.Add(emptyState);
+        listHost.Children.Add(scroll);
+
+        detailPanel.BorderBrush = new SolidColorBrush(UIColor.FromArgb(45, 128, 128, 128));
+        detailPanel.BorderThickness = new Thickness(1);
+        detailPanel.CornerRadius = new CornerRadius(10);
+        detailPanel.Padding = new Thickness(16);
+        detailContent.Spacing = 10;
+        detailPlaceholder.Text = "选择一个应用查看详情";
+        detailPlaceholder.Opacity = .6;
+        detailPlaceholder.TextWrapping = TextWrapping.Wrap;
+        detailContent.Children.Add(detailPlaceholder);
+        detailPanel.Child = new ScrollViewer
+        {
+            Content = detailContent,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        var contentGrid = new Grid { ColumnSpacing = 20 };
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+        Grid.SetColumn(listHost, 0);
+        Grid.SetColumn(detailPanel, 1);
+        contentGrid.Children.Add(listHost);
+        contentGrid.Children.Add(detailPanel);
+        Grid.SetRow(contentGrid, 2);
+        root.Children.Add(contentGrid);
 
         Content = root;
         UpdateDatePickerState();
@@ -780,6 +811,7 @@ public sealed class AppsPage : Page
         var hant = language == LanguageMode.TraditionalChinese;
         title.Text = en ? "App usage" : hant ? "應用程式使用時間" : "应用使用时间";
         search.PlaceholderText = en ? "Search apps" : hant ? "搜尋應用程式" : "搜索应用";
+        detailPlaceholder.Text = en ? "Select an app to see details." : hant ? "選擇應用程式以查看詳情。" : "选择一个应用查看详情。";
         var index = Math.Clamp(period.SelectedIndex < 0 ? 0 : period.SelectedIndex, 0, 6);
         _updatingPeriod = true;
         period.Items.Clear();
@@ -889,11 +921,12 @@ public sealed class AppsPage : Page
             var key = Key(app);
             if (!rows.TryGetValue(key, out var row))
             {
-                row = new AppRow(app, _language, _accentColor, _showAppDetailsAsync);
+                row = new AppRow(app, _language, _accentColor, SelectApp);
                 rows[key] = row;
             }
             row.ApplyAccent(_accentColor);
             row.Update(app, denominator, _language);
+            row.SetSelected(string.Equals(key, _selectedKey, StringComparison.OrdinalIgnoreCase));
         }
 
         var ordered = apps.Select(a => rows[Key(a)].Border).ToArray();
@@ -943,6 +976,139 @@ public sealed class AppsPage : Page
         }
     }
 
+    async Task SelectApp(AppStat app)
+    {
+        _selectedKey = Key(app);
+        foreach (var pair in rows)
+            pair.Value.SetSelected(string.Equals(pair.Key, _selectedKey, StringComparison.OrdinalIgnoreCase));
+
+        ShowDetailLoading(app);
+        if (_showAppDetailsAsync is not null)
+            await _showAppDetailsAsync(app);
+    }
+
+    public void ShowDetailLoading(AppStat app)
+    {
+        detailContent.Children.Clear();
+        detailContent.Children.Add(new TextBlock
+        {
+            Text = UiHelpers.FriendlyName(app, _language),
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+        detailContent.Children.Add(new ProgressRing
+        {
+            IsActive = true,
+            Width = 20,
+            Height = 20,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+    }
+
+    public void ShowDetailError()
+    {
+        detailContent.Children.Clear();
+        detailContent.Children.Add(new TextBlock
+        {
+            Text = _language == LanguageMode.English
+                ? "Could not load app details."
+                : _language == LanguageMode.TraditionalChinese
+                    ? "無法載入應用程式詳情。"
+                    : "无法加载应用详情。",
+            Opacity = .65,
+            TextWrapping = TextWrapping.Wrap
+        });
+    }
+
+    public void ShowDetails(AppHistoryResponse history, AppStat app, long periodTotal)
+    {
+        if (!string.Equals(_selectedKey, Key(app), StringComparison.OrdinalIgnoreCase)) return;
+
+        detailContent.Children.Clear();
+        var en = _language == LanguageMode.English;
+        var hant = _language == LanguageMode.TraditionalChinese;
+
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
+        header.ColumnDefinitions.Add(new ColumnDefinition());
+        var icon = new WinUIImage { Width = 42, Height = 42, Stretch = Stretch.Uniform };
+        UiHelpers.SetAppIcon(icon, app);
+        header.Children.Add(icon);
+
+        var details = new StackPanel { Spacing = 2 };
+        details.Children.Add(new TextBlock
+        {
+            Text = UiHelpers.FriendlyName(app, _language),
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+        var share = periodTotal > 0 ? history.total_seconds * 100.0 / periodTotal : 0;
+        details.Children.Add(new TextBlock
+        {
+            Text = en
+                ? $"{UiHelpers.Format(history.total_seconds, _language)}  ·  {share:F1}% of period"
+                : hant
+                    ? $"{UiHelpers.Format(history.total_seconds, _language)}  ·  佔期間 {share:F1}%"
+                    : $"{UiHelpers.Format(history.total_seconds, _language)}  ·  占期间 {share:F1}%",
+            Opacity = .68,
+            TextWrapping = TextWrapping.Wrap
+        });
+        Grid.SetColumn(details, 1);
+        header.Children.Add(details);
+        detailContent.Children.Add(header);
+
+        detailContent.Children.Add(new TextBlock
+        {
+            Text = en ? "Daily history" : hant ? "每日使用歷史" : "每日使用历史",
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+
+        var days = history.daily.Where(x => x.seconds > 0).ToArray();
+        if (days.Length == 0)
+        {
+            detailContent.Children.Add(new TextBlock
+            {
+                Text = en ? "No usage recorded." : hant ? "暫無使用記錄。" : "暂无使用记录。",
+                Opacity = .6
+            });
+            return;
+        }
+
+        foreach (var day in days)
+        {
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock
+            {
+                Text = FormatHistoryDate(day.label),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var value = new TextBlock
+            {
+                Text = UiHelpers.Format(day.seconds, _language),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = .75
+            };
+            Grid.SetColumn(value, 1);
+            row.Children.Add(value);
+            detailContent.Children.Add(row);
+        }
+    }
+
+    string FormatHistoryDate(string raw)
+    {
+        if (DateTime.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            return _language == LanguageMode.English ? day.ToString("MMM d, yyyy") : day.ToString("yyyy年M月d日");
+        return raw;
+    }
+
     static void ApplyComboBoxAccent(ComboBox combo, UIColor color)
     {
         var accent = new SolidColorBrush(color);
@@ -965,14 +1131,17 @@ public sealed class AppsPage : Page
         readonly TextBlock name, path, time;
         readonly ProgressBar bar;
         readonly WinUIImage icon;
-        readonly Func<AppStat, Task>? onDetails;
+        readonly Func<AppStat, Task>? onSelect;
         string iconKey = "";
         AppStat _app = new();
+        UIColor _accentColor;
+        bool _selected;
         static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
-        public AppRow(AppStat app, LanguageMode language, UIColor accentColor, Func<AppStat, Task>? onDetails)
+        public AppRow(AppStat app, LanguageMode language, UIColor accentColor, Func<AppStat, Task>? onSelect)
         {
-            this.onDetails = onDetails;
+            this.onSelect = onSelect;
+            _accentColor = accentColor;
             var grid = new Grid { Padding = new Thickness(10), ColumnSpacing = 14 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -1002,8 +1171,8 @@ public sealed class AppsPage : Page
             };
             Border.Tapped += async (_, _) =>
             {
-                if (this.onDetails is not null)
-                    await this.onDetails(_app);
+                if (this.onSelect is not null)
+                    await this.onSelect(_app);
             };
             Update(app, 0, language);
         }
@@ -1024,6 +1193,7 @@ public sealed class AppsPage : Page
 
         public void ApplyAccent(UIColor color)
         {
+            _accentColor = color;
             var accent = new SolidColorBrush(color);
             var track = new SolidColorBrush(UIColor.FromArgb(40, color.R, color.G, color.B));
             bar.Foreground = accent;
@@ -1031,6 +1201,21 @@ public sealed class AppsPage : Page
             bar.Resources["ProgressBarIndicatorForeground"] = accent;
             bar.Resources["ProgressBarIndicatorForegroundPointerOver"] = accent;
             bar.Resources["ProgressBarTrackFill"] = track;
+            ApplySelectionBackground();
+        }
+
+        public void SetSelected(bool selected)
+        {
+            if (_selected == selected) return;
+            _selected = selected;
+            ApplySelectionBackground();
+        }
+
+        void ApplySelectionBackground()
+        {
+            Border.Background = _selected
+                ? new SolidColorBrush(UIColor.FromArgb(32, _accentColor.R, _accentColor.G, _accentColor.B))
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
 
         void SetIcon(AppStat app)
