@@ -12,10 +12,16 @@ namespace ScreenTimeRS.UI;
 /// </summary>
 public static class ThemeManager
 {
-    public static readonly Color DefaultAccent = Color.FromArgb(255, 0, 0, 0);
+    public static readonly Color DefaultAccent = Color.FromArgb(255, 0, 120, 212);
 
+    // One data accent for the whole app: the classic Windows blue on light, a
+    // lighter tint on dark so bars and indicators keep their contrast. The
+    // interface chrome stays neutral grey; colour is reserved for data and
+    // interactive state.
     public static Color AccentFor(ElementTheme theme) =>
-        theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+        theme == ElementTheme.Dark
+            ? Color.FromArgb(255, 76, 194, 255)
+            : Color.FromArgb(255, 0, 120, 212);
 
     public static void ApplyAccent(Color accent)
     {

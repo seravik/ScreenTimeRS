@@ -112,7 +112,7 @@ public sealed partial class MainWindow : Window
         ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
-        _overviewPage.PauseToggleRequested += TogglePause;
+        _overviewPage.PauseToggleRequested += (_, _) => TogglePause();
         _appsPage = new AppsPage(LoadDayUsageAsync, ShowAppDetailsAsync, LoadAppsAllTimeAsync);
         _statsPage = new StatsPage(LoadStatsPeriodAsync);
         _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, () => { }, RefreshRecentFocusHistory);
@@ -189,8 +189,7 @@ public sealed partial class MainWindow : Window
         ApplyTitleBarTheme();
     }
 
-    private Color CurrentAccent() =>
-        RootGrid.ActualTheme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+    private Color CurrentAccent() => ThemeManager.AccentFor(RootGrid.ActualTheme);
 
     private void ApplyTitleBarTheme()
     {
