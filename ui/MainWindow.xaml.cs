@@ -652,7 +652,10 @@ public sealed partial class MainWindow : Window
     {
         while (true)
         {
-            await Task.Delay(1000);
+            // The collector writes once per second, but the overview does not need
+            // to repaint that often. Two seconds keeps the UI calm and cuts the
+            // per-tick JSON parse in half.
+            await Task.Delay(2000);
 
             if (File.Exists(_shutdownPath))
             {

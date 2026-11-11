@@ -131,7 +131,8 @@ public sealed class OverviewPage : Page
     readonly TextBlock hourlyHoverText;
     readonly TextBlock topAppsTitle;
     readonly StackPanel topApps;
-    readonly List<ProgressBar> topAppBars = new();
+    readonly List<Border> topAppBars = new();
+    string _topAppsSignature = "";
     int _hoveredHourlyIndex = -1;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
@@ -281,7 +282,7 @@ public sealed class OverviewPage : Page
         foreach (var bar in hourlyBars)
             bar.Background = brush;
         foreach (var bar in topAppBars)
-            bar.Foreground = brush;
+            bar.Background = brush;
 
         // InfoBar uses dedicated severity theme resources rather than the
         // generic accent resources. Override the success-state resources
@@ -314,6 +315,7 @@ public sealed class OverviewPage : Page
         topAppsTitle.Text = en ? "Today's top 5 apps" : hant ? "今日應用程式 Top 5" : "今日应用 Top 5";
         hourlyTitle.Text = en ? "Today by hour" : hant ? "今天每小時" : "今日按小时";
         hourlyHint.Text = "";
+        _topAppsSignature = "";
         UpdateSnapshot(_lastSnapshot ?? new Snapshot());
         if (_hoveredHourlyIndex >= 0)
             ShowHourlyHover(_hoveredHourlyIndex);
@@ -321,21 +323,25 @@ public sealed class OverviewPage : Page
     public void UpdateSnapshot(Snapshot s)
     {
         _lastSnapshot = s;
-        todayValue.Text = UiHelpers.Format(s.today, _language);
+        SetText(todayValue, UiHelpers.Format(s.today, _language));
 
         var en = _language == LanguageMode.English;
         var hant = _language == LanguageMode.TraditionalChinese;
-        pauseToggle.Content = s.paused
+        var pauseText = s.paused
             ? (en ? "Resume recording" : hant ? "繼續記錄" : "继续记录")
             : (en ? "Pause recording" : hant ? "暫停記錄" : "暂停记录");
-        sessionValue.Text = UiHelpers.Format(s.current_session_seconds, _language);
-        longestValue.Text = UiHelpers.Format(s.longest_session_today, _language);
-        unlockValue.Text = s.unlocks_today.ToString();
+        if (!Equals(pauseToggle.Content, pauseText))
+            pauseToggle.Content = pauseText;
+        SetText(sessionValue, UiHelpers.Format(s.current_session_seconds, _language));
+        SetText(longestValue, UiHelpers.Format(s.longest_session_today, _language));
+        SetText(unlockValue, s.unlocks_today.ToString());
         var hourlyMax = Math.Max(1, s.hourly_today.Select(x => Math.Max(0, x.seconds)).DefaultIfEmpty(0).Max());
         var hourlyRecordedTotal = s.hourly_today.Sum(x => Math.Max(0, x.seconds));
         for (int i = 0; i < hourlyBars.Length; i++) {
             var seconds = i < s.hourly_today.Length ? Math.Max(0, s.hourly_today[i].seconds) : 0;
-            hourlyBars[i].Height = seconds <= 0 ? 0 : Math.Max(6, 105 * seconds / (double)hourlyMax);
+            var barHeight = seconds <= 0 ? 0 : Math.Max(6, 105 * seconds / (double)hourlyMax);
+            if (Math.Abs(hourlyBars[i].Height - barHeight) > 0.5)
+                hourlyBars[i].Height = barHeight;
         }
         var dayTotalForHint = Math.Max(0, s.today);
         var missingHourly = Math.Max(0, dayTotalForHint - hourlyRecordedTotal);
@@ -401,12 +407,16 @@ public sealed class OverviewPage : Page
 
     private void UpdateTopApps(Snapshot s)
     {
+        var top = s.apps.Where(a => a.seconds > 0).OrderByDescending(a => a.seconds).Take(5).ToArray();
+        var signature = string.Join("|", top.Select(a => $"{a.name}\u0001{a.seconds}\u0001{a.exe_path}"));
+        if (signature == _topAppsSignature) return;
+        _topAppsSignature = signature;
+
         topApps.Children.Clear();
         topAppBars.Clear();
 
         var en = _language == LanguageMode.English;
         var hant = _language == LanguageMode.TraditionalChinese;
-        var top = s.apps.Where(a => a.seconds > 0).OrderByDescending(a => a.seconds).Take(5).ToArray();
         if (top.Length == 0)
         {
             topApps.Children.Add(new TextBlock
@@ -443,21 +453,40 @@ public sealed class OverviewPage : Page
             row.Children.Add(name);
             row.Children.Add(time);
 
-            var bar = new ProgressBar
+            // A static two-column bar instead of ProgressBar: ProgressBar runs an
+            // implicit animation whenever Value changes, which made the list
+            // flicker while the snapshot refreshed.
+            var percent = Math.Clamp(app.seconds * 100.0 / max, 1.0, 100.0);
+            var track = new Grid { Height = 4 };
+            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(percent, GridUnitType.Star) });
+            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.01, 100.0 - percent), GridUnitType.Star) });
+            var background = new Border
             {
-                Minimum = 0,
-                Maximum = 100,
-                Value = Math.Clamp(app.seconds * 100.0 / max, 0.0, 100.0),
-                Height = 4,
-                Foreground = UiHelpers.AccentBrush(),
-                Background = new SolidColorBrush(UIColor.FromArgb(28, 128, 128, 128))
+                Background = new SolidColorBrush(UIColor.FromArgb(28, 128, 128, 128)),
+                CornerRadius = new CornerRadius(2)
             };
+            Grid.SetColumnSpan(background, 2);
+            var fill = new Border
+            {
+                Background = UiHelpers.AccentBrush(),
+                CornerRadius = new CornerRadius(2)
+            };
+            Grid.SetColumn(fill, 0);
+            track.Children.Add(background);
+            track.Children.Add(fill);
+
             var stack = new StackPanel { Spacing = 4 };
             stack.Children.Add(row);
-            stack.Children.Add(bar);
+            stack.Children.Add(track);
             topApps.Children.Add(stack);
-            topAppBars.Add(bar);
+            topAppBars.Add(fill);
         }
+    }
+
+    private static void SetText(TextBlock block, string text)
+    {
+        if (!string.Equals(block.Text, text, StringComparison.Ordinal))
+            block.Text = text;
     }
 
     void ShowHourlyHover(int index)
