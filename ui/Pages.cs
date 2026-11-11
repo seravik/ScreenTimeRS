@@ -132,7 +132,7 @@ public sealed class OverviewPage : Page
     readonly TextBlock topAppsTitle;
     readonly StackPanel topApps;
     readonly List<Border> topAppBars = new();
-    string _topAppsSignature = "";
+    string? _topAppsSignature;
     int _hoveredHourlyIndex = -1;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     Snapshot? _lastSnapshot;
@@ -315,7 +315,7 @@ public sealed class OverviewPage : Page
         topAppsTitle.Text = en ? "Today's top 5 apps" : hant ? "今日應用程式 Top 5" : "今日应用 Top 5";
         hourlyTitle.Text = en ? "Today by hour" : hant ? "今天每小時" : "今日按小时";
         hourlyHint.Text = "";
-        _topAppsSignature = "";
+        _topAppsSignature = null;
         UpdateSnapshot(_lastSnapshot ?? new Snapshot());
         if (_hoveredHourlyIndex >= 0)
             ShowHourlyHover(_hoveredHourlyIndex);
@@ -603,6 +603,9 @@ public sealed class AppsPage : Page
     bool _updatingPeriod;
     LanguageMode _language = LanguageMode.SimplifiedChinese;
     UIColor _accentColor = ThemeManager.DefaultAccent;
+    AppStat? _detailApp;
+    AppHistoryResponse? _detailHistory;
+    long _detailTotal;
 
     public AppsPage(
         Func<DateTime, Task>? loadDayUsageAsync = null,
@@ -729,6 +732,7 @@ public sealed class AppsPage : Page
     async void Period_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_updatingPeriod || period.SelectedIndex < 0) return;
+        ClearDetail();
         UpdateDatePickerState();
         if (period.SelectedIndex == 5)
         {
@@ -761,6 +765,7 @@ public sealed class AppsPage : Page
     async void DatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
     {
         if (_updatingPeriod || !args.NewDate.HasValue) return;
+        ClearDetail();
         _updatingPeriod = true;
         period.SelectedIndex = 6;
         _updatingPeriod = false;
@@ -804,6 +809,17 @@ public sealed class AppsPage : Page
             RenderList();
     }
 
+    void ClearDetail()
+    {
+        _selectedKey = null;
+        _detailApp = null;
+        _detailHistory = null;
+        foreach (var row in rows.Values)
+            row.SetSelected(false);
+        detailContent.Children.Clear();
+        detailContent.Children.Add(detailPlaceholder);
+    }
+
     public void ApplyLanguage(LanguageMode language)
     {
         _language = language;
@@ -826,6 +842,11 @@ public sealed class AppsPage : Page
         UpdateDatePickerState();
         UpdateDaySummary();
         RenderList();
+
+        // Re-render the open detail so its dates and labels follow the new UI
+        // language instead of staying in the previous one.
+        if (_detailApp is not null && _detailHistory is not null)
+            ShowDetails(_detailHistory, _detailApp, _detailTotal);
     }
 
     public void ApplyAccent(UIColor color)
@@ -989,6 +1010,8 @@ public sealed class AppsPage : Page
 
     public void ShowDetailLoading(AppStat app)
     {
+        _detailApp = null;
+        _detailHistory = null;
         detailContent.Children.Clear();
         detailContent.Children.Add(new TextBlock
         {
@@ -1009,6 +1032,9 @@ public sealed class AppsPage : Page
 
     public void ShowDetailError()
     {
+        if (_selectedKey is null) return;
+        _detailApp = null;
+        _detailHistory = null;
         detailContent.Children.Clear();
         detailContent.Children.Add(new TextBlock
         {
@@ -1026,6 +1052,9 @@ public sealed class AppsPage : Page
     {
         if (!string.Equals(_selectedKey, Key(app), StringComparison.OrdinalIgnoreCase)) return;
 
+        _detailApp = app;
+        _detailHistory = history;
+        _detailTotal = periodTotal;
         detailContent.Children.Clear();
         var en = _language == LanguageMode.English;
         var hant = _language == LanguageMode.TraditionalChinese;

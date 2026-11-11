@@ -391,25 +391,28 @@ public sealed partial class MainWindow : Window
                     Nav.OpenPaneLength = _savedPaneLength;
                     if (!string.IsNullOrWhiteSpace(selectedTag))
                     {
+                        NavigationViewItem? match = null;
                         foreach (var item in Nav.MenuItems)
                         {
                             if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
                             {
-                                Nav.SelectedItem = nvi;
+                                match = nvi;
                                 break;
                             }
                         }
-                        if ((Nav.SelectedItem as NavigationViewItem)?.Tag?.ToString() != selectedTag)
+                        if (match is null)
                         {
                             foreach (var item in Nav.FooterMenuItems)
                             {
                                 if (item is NavigationViewItem nvi && string.Equals(nvi.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
                                 {
-                                    Nav.SelectedItem = nvi;
+                                    match = nvi;
                                     break;
                                 }
                             }
                         }
+                        if (match is not null)
+                            Nav.SelectedItem = match;
                     }
                     Nav.IsPaneOpen = paneOpen;
                     Nav.UpdateLayout();
