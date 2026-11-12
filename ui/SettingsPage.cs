@@ -10,10 +10,11 @@ using UIColor = Windows.UI.Color;
 namespace ScreenTimeRS.UI;
 
 /// <summary>
-/// Settings: three groups — Appearance, General, Data — each a heading plus
-/// plain cards, matching the Overview / Usage / Focus pages. The danger zone
-/// (delete all data) lives inside the Data group. There is no custom accent
-/// picker, no data-location editor and no diagnostics view.
+/// Settings: a Windows-11-style settings page. Each group is a single large
+/// card whose rows are separated by hairline dividers, with a label (and an
+/// optional description) on the left and the control on the right. Rows share
+/// one height and density, so toggles, dropdowns and buttons no longer look
+/// mismatched. The danger zone is a red sub-region inside the Data card.
 /// </summary>
 public sealed class SettingsPage : Page
 {
@@ -22,9 +23,9 @@ public sealed class SettingsPage : Page
 
     readonly TextBlock _title;
     readonly TextBlock _appearanceHeading, _themeLabel;
-    readonly TextBlock _generalHeading, _startupText, _languageLabel;
-    readonly TextBlock _dataHeading, _dataHint, _dangerHeading, _dangerHint;
-    readonly TextBlock _aboutHeading, _aboutText, _termsHeading, _termsHint;
+    readonly TextBlock _generalHeading, _startupText, _startupHint, _languageLabel;
+    readonly TextBlock _dataHeading, _dataLabel, _dataHint, _dangerHeading, _dangerHint;
+    readonly TextBlock _aboutHeading, _aboutText, _termsLabel, _termsHint;
 
     readonly ComboBox _theme, _language;
     readonly ToggleSwitch _startup;
@@ -65,6 +66,7 @@ public sealed class SettingsPage : Page
         // ---- General ----
         _generalHeading = Heading();
         _startupText = new TextBlock { FontSize = Ui.BodySize, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        _startupHint = Ui.Caption("");
         _startup = new ToggleSwitch { OnContent = "", OffContent = "", MinWidth = 0 };
         _startup.Toggled += (_, _) =>
         {
@@ -74,13 +76,6 @@ public sealed class SettingsPage : Page
         _suppressStartupToggle = true;
         _startup.IsOn = StartupEnabled();
         _suppressStartupToggle = false;
-
-        var startupRow = new Grid { ColumnSpacing = 16 };
-        startupRow.ColumnDefinitions.Add(new ColumnDefinition());
-        startupRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_startup, 1);
-        startupRow.Children.Add(_startupText);
-        startupRow.Children.Add(_startup);
 
         _languageLabel = Ui.Caption("");
         _language = new ComboBox { Width = 220 };
@@ -95,36 +90,32 @@ public sealed class SettingsPage : Page
 
         // ---- Data ----
         _dataHeading = Heading();
+        _dataLabel = Ui.Caption("");
         _dataHint = Ui.Caption("");
         _exportButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         _importButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         _exportButton.Click += (_, _) => ExportDataRequested?.Invoke(this, EventArgs.Empty);
         _importButton.Click += (_, _) => ImportDataRequested?.Invoke(this, EventArgs.Empty);
-        var dataButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
+        var dataButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         dataButtons.Children.Add(_exportButton);
         dataButtons.Children.Add(_importButton);
-        var dataStack = new StackPanel { Spacing = 8 };
-        dataStack.Children.Add(_dataHint);
-        dataStack.Children.Add(dataButtons);
 
-        _dangerHeading = SubHeading();
-        _dangerHint = Ui.Caption("");
-        _deleteButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
-        _deleteButton.Click += (_, _) => DeleteAllDataRequested?.Invoke(this, EventArgs.Empty);
-        var dangerStack = new StackPanel { Spacing = 8, Padding = new Thickness(20) };
-        dangerStack.Children.Add(_dangerHeading);
-        dangerStack.Children.Add(_dangerHint);
-        dangerStack.Children.Add(_deleteButton);
-        var dangerCard = new Border
+        _dangerHeading = new TextBlock
         {
-            BorderBrush = new SolidColorBrush(UIColor.FromArgb(110, 196, 43, 28)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Background = new SolidColorBrush(UIColor.FromArgb(10, 196, 43, 28)),
-            Child = dangerStack,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 8, 0, 0)
+            FontSize = Ui.BodySize,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(UIColor.FromArgb(255, 196, 43, 28))
         };
+        _dangerHint = new TextBlock
+        {
+            FontSize = Ui.CaptionSize,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(UIColor.FromArgb(255, 196, 43, 28)),
+            Opacity = .8
+        };
+        _deleteButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
+        StyleDeleteButton(_deleteButton);
+        _deleteButton.Click += (_, _) => DeleteAllDataRequested?.Invoke(this, EventArgs.Empty);
 
         // ---- About ----
         _aboutHeading = Heading();
@@ -132,32 +123,37 @@ public sealed class SettingsPage : Page
         _githubButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         _githubButton.Click += (_, _) => OpenRepository();
 
-        _termsHeading = SubHeading();
+        _termsLabel = Ui.Caption("");
         _termsHint = Ui.Caption("");
         _termsButton = new Button { HorizontalAlignment = HorizontalAlignment.Left };
         _termsButton.Click += async (_, _) => await ShowTermsAsync();
-        var termsStack = new StackPanel { Spacing = 8 };
-        termsStack.Children.Add(_termsHeading);
-        termsStack.Children.Add(_termsHint);
-        termsStack.Children.Add(_termsButton);
 
-        var aboutStack = new StackPanel { Spacing = 8 };
-        aboutStack.Children.Add(_aboutText);
-        aboutStack.Children.Add(_githubButton);
-        aboutStack.Children.Add(termsStack);
-
+        // ---- Assemble groups (Win11 settings style: one card per group) ----
         var root = new StackPanel { Spacing = 16, Padding = Ui.PagePadding };
         root.Children.Add(_title);
+
+        // Appearance group
         root.Children.Add(_appearanceHeading);
-        root.Children.Add(Ui.Card(LabeledControl(_themeLabel, _theme)));
+        root.Children.Add(GroupCard(
+            Row(_themeLabel, _theme)));
+
+        // General group
         root.Children.Add(_generalHeading);
-        root.Children.Add(Ui.Card(startupRow));
-        root.Children.Add(Ui.Card(LabeledControl(_languageLabel, _language)));
+        root.Children.Add(GroupCard(
+            Row(_startupText, _startup, _startupHint),
+            Row(_languageLabel, _language)));
+
+        // Data group
         root.Children.Add(_dataHeading);
-        root.Children.Add(Ui.Card(dataStack));
-        root.Children.Add(dangerCard);
+        root.Children.Add(GroupCard(
+            Row(_dataLabel, dataButtons, _dataHint),
+            DangerBlock()));
+
+        // About group
         root.Children.Add(_aboutHeading);
-        root.Children.Add(Ui.Card(aboutStack));
+        root.Children.Add(GroupCard(
+            Row(_aboutText, _githubButton),
+            Row(_termsLabel, _termsButton, _termsHint)));
 
         Content = new ScrollViewer
         {
@@ -177,18 +173,80 @@ public sealed class SettingsPage : Page
         Margin = new Thickness(0, 16, 0, 0)
     };
 
-    static TextBlock SubHeading() => new()
+    /// <summary>A large rounded card that holds one or more rows (or blocks).</summary>
+    static Border GroupCard(params UIElement[] children)
     {
-        FontSize = Ui.BodySize,
-        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        var stack = new StackPanel { Spacing = 0 };
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (i > 0) stack.Children.Add(Divider());
+            stack.Children.Add(children[i]);
+        }
+        return new Border
+        {
+            BorderBrush = new SolidColorBrush(UIColor.FromArgb(30, 128, 128, 128)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = stack
+        };
+    }
+
+    /// <summary>
+    /// One settings row: a label column on the left (title plus an optional
+    /// description below it) and a control pinned to the right edge. Both the
+    /// label and the control are vertically centred for a consistent row height.
+    /// </summary>
+    static Grid Row(TextBlock label, FrameworkElement control, TextBlock? hint = null)
+    {
+        var left = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(label);
+        if (hint != null) left.Children.Add(hint);
+
+        control.VerticalAlignment = VerticalAlignment.Center;
+        control.HorizontalAlignment = HorizontalAlignment.Right;
+
+        var grid = new Grid { Padding = new Thickness(20, 16, 20, 16), ColumnSpacing = 24 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(left);
+        grid.Children.Add(control);
+        return grid;
+    }
+
+    /// <summary>A hairline divider between rows inside a group card.</summary>
+    static Border Divider() => new()
+    {
+        Height = 1,
+        Background = new SolidColorBrush(UIColor.FromArgb(24, 128, 128, 128)),
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        Margin = new Thickness(20, 0, 20, 0)
     };
 
-    static StackPanel LabeledControl(TextBlock label, UIElement control)
+    /// <summary>The danger zone: a red-tinted sub-region inside the Data card.</summary>
+    Border DangerBlock()
     {
-        var stack = new StackPanel { Spacing = 8 };
-        stack.Children.Add(label);
-        stack.Children.Add(control);
-        return stack;
+        var text = new StackPanel { Spacing = 4 };
+        text.Children.Add(_dangerHeading);
+        text.Children.Add(_dangerHint);
+
+        var grid = new Grid { Padding = new Thickness(20, 16, 20, 16), ColumnSpacing = 24 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(text, 0);
+        Grid.SetColumn(_deleteButton, 1);
+        _deleteButton.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(text);
+        grid.Children.Add(_deleteButton);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(UIColor.FromArgb(10, 196, 43, 28)),
+            Child = grid,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
     }
 
     public void SetLanguage(LanguageMode preference, LanguageMode effective)
@@ -201,8 +259,10 @@ public sealed class SettingsPage : Page
         _themeLabel.Text = Str.Settings.Theme(effective);
         _generalHeading.Text = Str.Settings.General(effective);
         _startupText.Text = Str.Settings.Startup(effective);
+        _startupHint.Text = Str.Settings.StartupHint(effective);
         _languageLabel.Text = Str.Settings.DisplayLanguage(effective);
         _dataHeading.Text = Str.Settings.Data(effective);
+        _dataLabel.Text = Str.Settings.DataLabel(effective);
         _dataHint.Text = Str.Settings.DataHint(effective);
         _exportButton.Content = Str.Settings.Export(effective);
         _importButton.Content = Str.Settings.Import(effective);
@@ -212,7 +272,7 @@ public sealed class SettingsPage : Page
         _aboutHeading.Text = Str.Settings.About(effective);
         _aboutText.Text = Str.Settings.Version(Version, effective);
         _githubButton.Content = Str.Settings.ViewSource(effective);
-        _termsHeading.Text = Str.Settings.Terms(effective);
+        _termsLabel.Text = Str.Settings.Terms(effective);
         _termsHint.Text = Str.Settings.TermsHint(effective);
         _termsButton.Content = Str.Settings.ViewTerms(effective);
 
@@ -279,6 +339,20 @@ public sealed class SettingsPage : Page
             });
         }
         catch { }
+    }
+
+    /// <summary>Paints a button as a solid red danger action, matching the
+    /// confirmation dialog's primary button.</summary>
+    static void StyleDeleteButton(Button button)
+    {
+        var danger = new SolidColorBrush(UIColor.FromArgb(255, 196, 43, 28));
+        var style = new Style(typeof(Button));
+        if (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var baseStyle) && baseStyle is Style defaultStyle)
+            style.BasedOn = defaultStyle;
+        style.Setters.Add(new Setter(Button.BackgroundProperty, danger));
+        style.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Microsoft.UI.Colors.White)));
+        style.Setters.Add(new Setter(Button.BorderBrushProperty, danger));
+        button.Style = style;
     }
 
     static bool StartupEnabled()

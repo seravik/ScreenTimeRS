@@ -186,6 +186,13 @@ internal static class Str
             _ => "登录 Windows 后在后台启动"
         };
 
+        public static string StartupHint(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Begin tracking usage as soon as Windows starts.",
+            LanguageMode.TraditionalChinese => "Windows 啟動後立即開始記錄使用狀況。",
+            _ => "Windows 启动后立即开始记录使用情况。"
+        };
+
         public static string Language(LanguageMode l) => l switch
         {
             LanguageMode.English => "Language",
@@ -212,6 +219,13 @@ internal static class Str
             LanguageMode.English => "Export or import local usage history. A local safety copy is created before an import replaces anything.",
             LanguageMode.TraditionalChinese => "匯出或匯入本機使用歷史，匯入前會自動建立本機安全備份。",
             _ => "导出或导入本机使用历史，导入前会自动创建本地安全备份。"
+        };
+
+        public static string DataLabel(LanguageMode l) => l switch
+        {
+            LanguageMode.English => "Usage history",
+            LanguageMode.TraditionalChinese => "使用歷史",
+            _ => "使用历史"
         };
 
         public static string Export(LanguageMode l) => l switch
