@@ -19,6 +19,8 @@ namespace ScreenTimeRS.UI;
 public sealed class UsagePage : Page
 {
     const double ChartHeight = 140;
+    const double ChartColumnSpacing = 3;
+    const double ChartBarGap = 3;
 
     readonly Func<string[], Task<string?>> _query;
     readonly Button _trendTab, _appsTab;
@@ -32,6 +34,7 @@ public sealed class UsagePage : Page
     readonly TextBlock[] _metricValues = new TextBlock[4];
     readonly TextBlock _trendHint;
     readonly Grid _chart;
+    readonly ScrollViewer _chartScroll;
     readonly Canvas _chartLayer;
     readonly Border _chartTip;
     readonly TextBlock _chartTipText;
@@ -39,6 +42,7 @@ public sealed class UsagePage : Page
     readonly TextBlock _axisEnd;
     JsonDaily[] _trendDays = Array.Empty<JsonDaily>();
     int _trendHover = -1;
+    double _chartViewport;
     string _trendSignature = "";
 
     readonly ComboBox _appRange;
@@ -103,7 +107,12 @@ public sealed class UsagePage : Page
             metrics.Children.Add(stack);
         }
 
-        _chart = new Grid { Height = ChartHeight, ColumnSpacing = 3 };
+        _chart = new Grid
+        {
+            Height = ChartHeight,
+            ColumnSpacing = ChartColumnSpacing,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
         _chartTipText = new TextBlock
         {
             FontSize = Ui.CaptionSize,
@@ -123,9 +132,26 @@ public sealed class UsagePage : Page
         _chartLayer = new Canvas { IsHitTestVisible = false };
         _chartLayer.Children.Add(_chartTip);
 
-        var chartHost = new Grid();
-        chartHost.Children.Add(_chart);
-        chartHost.Children.Add(_chartLayer);
+        var chartContent = new Grid { Height = ChartHeight, VerticalAlignment = VerticalAlignment.Top };
+        chartContent.Children.Add(_chart);
+        chartContent.Children.Add(_chartLayer);
+
+        _chartScroll = new ScrollViewer
+        {
+            Content = chartContent,
+            Height = ChartHeight,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled
+        };
+        _chartScroll.SizeChanged += (_, _) =>
+        {
+            if (Math.Abs(_chartScroll.ActualWidth - _chartViewport) >= 1)
+                RenderTrendChart();
+        };
+        _chartScroll.ViewChanged += (_, _) => UpdateAxisLabels();
 
         _axisStart = new TextBlock { FontSize = Ui.CaptionSize, Opacity = .5 };
         _axisEnd = new TextBlock { FontSize = Ui.CaptionSize, Opacity = .5, HorizontalAlignment = HorizontalAlignment.Right };
@@ -137,7 +163,7 @@ public sealed class UsagePage : Page
         axis.Children.Add(_axisEnd);
 
         var chartStack = new StackPanel { Spacing = 0 };
-        chartStack.Children.Add(chartHost);
+        chartStack.Children.Add(_chartScroll);
         chartStack.Children.Add(axis);
 
         var trendControls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
@@ -523,19 +549,25 @@ public sealed class UsagePage : Page
         _axisStart.Text = ShortDate(days[0].label);
         _axisEnd.Text = ShortDate(days[^1].label);
 
+        // Every range keeps the bar thickness of the 30-day chart: the slot is
+        // derived from the 30-day width, and longer ranges scroll horizontally
+        // instead of squeezing the bars into hairlines.
+        _chartViewport = _chartScroll.ActualWidth;
+        var slot = ChartSlot(_chartViewport);
+        _chart.Width = days.Length * slot + (days.Length - 1) * ChartColumnSpacing;
+
         var peak = Math.Max(1, days.Max(d => Math.Max(0, d.seconds)));
         for (int i = 0; i < days.Length; i++)
         {
-            _chart.ColumnDefinitions.Add(new ColumnDefinition());
+            _chart.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(slot) });
             var cell = new Grid();
-            var gap = days.Length <= 60 ? 3 : 0.5;
             var bar = new Border
             {
                 Height = days[i].seconds <= 0 ? 0 : Math.Max(4, ChartHeight * days[i].seconds / (double)peak),
                 CornerRadius = new CornerRadius(2, 2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(gap, 0, gap, 0),
+                Margin = new Thickness(ChartBarGap, 0, ChartBarGap, 0),
                 Background = Ui.Brush(_accent),
                 Opacity = .9
             };
@@ -547,6 +579,47 @@ public sealed class UsagePage : Page
             Grid.SetColumn(cell, i);
             _chart.Children.Add(cell);
         }
+
+        UpdateAxisLabels();
+        // Anchor long ranges to the most recent days instead of showing the
+        // empty far end of the window.
+        if (_chart.Width > _chartScroll.ViewportWidth + 1)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _chartScroll.UpdateLayout();
+                _chartScroll.ChangeView(Math.Max(0, _chart.Width - _chartScroll.ViewportWidth), null, null, true);
+            });
+        }
+    }
+
+    void UpdateAxisLabels()
+    {
+        var days = _trendDays;
+        if (days.Length == 0)
+            return;
+
+        var slot = ChartSlot(_chartViewport);
+        var step = slot + ChartColumnSpacing;
+        if (_chartScroll.ScrollableWidth <= 1 || step <= 0)
+        {
+            _axisStart.Text = ShortDate(days[0].label);
+            _axisEnd.Text = ShortDate(days[^1].label);
+            return;
+        }
+
+        var first = (int)Math.Floor(_chartScroll.HorizontalOffset / step);
+        var last = (int)Math.Floor((_chartScroll.HorizontalOffset + Math.Max(step, _chartScroll.ViewportWidth)) / step);
+        first = Math.Clamp(first, 0, days.Length - 1);
+        last = Math.Clamp(last, 0, days.Length - 1);
+        _axisStart.Text = ShortDate(days[first].label);
+        _axisEnd.Text = ShortDate(days[last].label);
+    }
+
+    static double ChartSlot(double viewport)
+    {
+        var width = viewport > 0 ? viewport : 720;
+        return Math.Max(4, (width - 29 * ChartColumnSpacing) / 30.0);
     }
 
     void ShowChartTip(int index)
@@ -559,8 +632,9 @@ public sealed class UsagePage : Page
         _chartTipText.Text = $"{day.label}  ·  {UiHelpers.Format(Math.Max(0, day.seconds), _language)}";
         _chartTip.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
 
-        var column = _chart.ActualWidth / _trendDays.Length;
-        var left = column * index + (column - _chartTip.DesiredSize.Width) / 2;
+        var slot = ChartSlot(_chartViewport);
+        var step = slot + ChartColumnSpacing;
+        var left = step * index + (slot - _chartTip.DesiredSize.Width) / 2;
         left = Math.Clamp(left, 0, Math.Max(0, _chart.ActualWidth - _chartTip.DesiredSize.Width));
         Canvas.SetLeft(_chartTip, left);
         Canvas.SetTop(_chartTip, 0);
