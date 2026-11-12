@@ -48,6 +48,13 @@ public sealed class FocusPage : Page
     private int _lastCompletedCount = -1;
     private bool _lastFocusActive;
     private DateTime _completionMessageUntilUtc = DateTime.MinValue;
+    // Right after Start/Stop the snapshot still describes the previous state for
+    // a moment. These fields carry a short optimistic window so the interface
+    // reacts instantly instead of freezing on the old state for a couple of
+    // seconds, and so a stale snapshot cannot flash the display backwards.
+    private bool _optimisticPending;
+    private bool _optimisticRunning;
+    private DateTime _optimisticUntilUtc = DateTime.MinValue;
     private bool _historyLoadStarted;
     private bool _historyReloadPending;
     private bool _pageReady;
@@ -446,7 +453,7 @@ public sealed class FocusPage : Page
         UpdateCustomVisibility();
         if (IsCustomSelected() && string.IsNullOrWhiteSpace(_customMinutes.Text))
             _customMinutes.Text = "30";
-        if (!(_latest?.focus_active == true || _latest?.focus_paused == true))
+        if (!_optimisticPending && !(_latest?.focus_active == true || _latest?.focus_paused == true))
         {
             _timer.Text = FormatCountdown(SelectedDurationSeconds());
             _progress.Value = 0;
@@ -461,7 +468,7 @@ public sealed class FocusPage : Page
 
     private void UpdateCustomDurationPreview()
     {
-        if (!IsCustomSelected() || _latest?.focus_active == true || _latest?.focus_paused == true) return;
+        if (_optimisticPending || !IsCustomSelected() || _latest?.focus_active == true || _latest?.focus_paused == true) return;
         var custom = TryGetCustomDurationSeconds();
         _timer.Text = custom.HasValue ? FormatCountdown(custom.Value) : FormatCountdown(25 * 60);
         _state.Text = custom.HasValue ? ReadyStateText() : InvalidCustomText();
@@ -496,7 +503,19 @@ public sealed class FocusPage : Page
         _start.IsEnabled = false;
         var ok = await _runCommand(new[] { "--focus-start", seconds.ToString() });
         if (ok)
+        {
+            // React instantly: the snapshot still carries the old state for up
+            // to a second, so show the fresh session optimistically and let the
+            // next snapshot take over.
+            BeginOptimistic(running: true);
+            _timer.Text = FormatCountdown(seconds);
+            _progress.Value = 0;
+            _state.Text = ActiveStateText();
+            _pause.IsEnabled = true;
+            _resume.IsEnabled = false;
+            _stop.IsEnabled = true;
             await Task.Delay(100);
+        }
         await RefreshHistoryAsync(reset: true);
     }
 
@@ -508,9 +527,32 @@ public sealed class FocusPage : Page
 
     private async Task StopAsync()
     {
-        await _runCommand(new[] { "--focus-stop" });
+        var ok = await _runCommand(new[] { "--focus-stop" });
+        if (ok)
+        {
+            // Mirror of StartAsync: return to the ready state immediately so the
+            // last active snapshot cannot flash the running timer back.
+            BeginOptimistic(running: false);
+            _timer.Text = FormatCountdown(SelectedDurationSeconds());
+            _progress.Value = 0;
+            _state.Text = ReadyStateText();
+            _start.IsEnabled = !IsCustomSelected() || TryGetCustomDurationSeconds().HasValue;
+            _pause.IsEnabled = false;
+            _resume.IsEnabled = false;
+            _stop.IsEnabled = false;
+        }
         await RefreshHistoryAsync(reset: true);
     }
+
+    private void BeginOptimistic(bool running)
+    {
+        _optimisticPending = true;
+        _optimisticRunning = running;
+        _optimisticUntilUtc = DateTime.UtcNow.AddSeconds(3);
+    }
+
+    private string ActiveStateText()
+        => _language == LanguageMode.English ? "Focus in progress" : _language == LanguageMode.TraditionalChinese ? "專注進行中" : "专注进行中";
 
     private Snapshot? _latest;
 
@@ -523,6 +565,19 @@ public sealed class FocusPage : Page
         _lastCompletedCount = (int)Math.Max(0, snapshot.focus_today_completed);
 
         var hasFocus = snapshot.focus_active || snapshot.focus_paused;
+
+        // A snapshot written just before the Start/Stop command still describes
+        // the previous state. Keep the optimistic display until the snapshot
+        // catches up (or the short grace window expires) instead of flashing
+        // the old state back for a second.
+        if (_optimisticPending)
+        {
+            if (hasFocus == _optimisticRunning || DateTime.UtcNow >= _optimisticUntilUtc)
+                _optimisticPending = false;
+            else
+                return;
+        }
+
         var planned = Math.Max(1, snapshot.focus_planned_seconds > 0 ? snapshot.focus_planned_seconds : SelectedDurationSeconds());
         var remaining = hasFocus ? Math.Max(0, snapshot.focus_remaining_seconds) : planned;
         _timer.Text = FormatCountdown(remaining);

@@ -524,11 +524,11 @@ public sealed partial class MainWindow : Window
     {
         while (true)
         {
-            // The collector rewrites the snapshot once per second. Poll at that
-            // same rate while a focus session is running so the countdown stays
-            // in sync with real time; otherwise two seconds keeps the UI calm
-            // and halves the per-tick JSON parse.
-            await Task.Delay(_latestSnapshot.focus_active ? 1000 : 2000);
+            // The collector rewrites the snapshot once per second. Polling at the
+            // same rate keeps the focus countdown in sync with real time and
+            // removes the up-to-two-second window where a freshly started
+            // session still showed the previous state.
+            await Task.Delay(1000);
 
             if (File.Exists(_shutdownPath))
             {
