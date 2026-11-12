@@ -454,19 +454,45 @@ public sealed partial class MainWindow : Window
             if (!File.Exists(exe)) return;
 
             var fullExe = Path.GetFullPath(exe);
+            Process? stale = null;
             foreach (var p in Process.GetProcessesByName("screentime-rs"))
             {
+                var same = false;
                 try
                 {
                     var running = Path.GetFullPath(p.MainModule?.FileName ?? "");
-                    if (string.Equals(running, fullExe, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _collector = p;
-                        return;
-                    }
+                    same = string.Equals(running, fullExe, StringComparison.OrdinalIgnoreCase);
                 }
                 catch { }
-                finally { p.Dispose(); }
+
+                if (!same)
+                {
+                    p.Dispose();
+                    continue;
+                }
+
+                if (SnapshotIsFresh())
+                {
+                    _collector = p;
+                    return;
+                }
+
+                // The process exists but its collector thread stopped writing
+                // snapshots (dead thread, e.g. a panic). Reusing it would leave
+                // the app running with no recording, so replace it.
+                stale = p;
+                break;
+            }
+
+            if (stale is not null)
+            {
+                try
+                {
+                    stale.Kill();
+                    stale.WaitForExit(3000);
+                }
+                catch { }
+                finally { stale.Dispose(); }
             }
 
             _collector = Process.Start(new ProcessStartInfo(fullExe, "--background")
@@ -478,6 +504,20 @@ public sealed partial class MainWindow : Window
             });
         }
         catch { }
+    }
+
+    /// <summary>
+    /// The collector rewrites the snapshot every second, so a stale file means
+    /// the collector thread is no longer running even if the process is alive.
+    /// </summary>
+    private bool SnapshotIsFresh()
+    {
+        try
+        {
+            return File.Exists(_snapshotPath)
+                && DateTime.Now - File.GetLastWriteTime(_snapshotPath) < TimeSpan.FromSeconds(20);
+        }
+        catch { return false; }
     }
 
     private async Task RefreshLoop()

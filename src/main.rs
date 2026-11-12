@@ -461,7 +461,17 @@ impl Database {
         {
             let mut st = tx.prepare("INSERT INTO focus_sessions(start_at,end_at,planned_seconds,active_seconds,pause_count,status) VALUES(?1,?2,?3,?4,?5,?6)")?;
             for row in focus_sessions {
-                st.execute(params![row.start_at,row.end_at,row.planned_seconds,row.active_seconds,row.pause_count,row.status])?;
+                // An export taken while a focus session was running contains an
+                // active/paused row. Importing it verbatim would resurrect a
+                // phantom live session in the fresh dataset, so close it instead.
+                let live = row.status == "active" || row.status == "paused";
+                let status = if live { "stopped" } else { row.status.as_str() };
+                let end_at = if live {
+                    row.end_at.clone().or_else(|| Some(row.start_at.clone()))
+                } else {
+                    row.end_at.clone()
+                };
+                st.execute(params![row.start_at,end_at,row.planned_seconds,row.active_seconds,row.pause_count,status])?;
             }
         }
         {
@@ -587,25 +597,33 @@ impl Database {
         if !computer_active || seconds <= 0 { return Ok(()); }
         let mut c = self.conn()?;
         let tx = c.transaction()?;
-        let row: Option<(i64,i64,i64)> = tx.query_row(
-            "SELECT id,planned_seconds,active_seconds FROM focus_sessions WHERE status='active' ORDER BY id DESC LIMIT 1",
+        let row: Option<(i64,i64,i64,String)> = tx.query_row(
+            "SELECT id,planned_seconds,active_seconds,start_at FROM focus_sessions WHERE status='active' ORDER BY id DESC LIMIT 1",
             [],
-            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?)),
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)),
         ).optional()?;
-        let Some((id, planned, current)) = row else {
+        let Some((id, planned, current, start_at)) = row else {
             tx.commit()?;
             return Ok(());
         };
         let remaining = (planned - current).max(0);
         let applied = remaining.min(seconds);
         if applied > 0 {
+            // Every daily focus aggregate uses the session's start day, so a
+            // session that crosses midnight is attributed to one day
+            // consistently (focus_state and rebuild_focus_daily do the same).
+            let session_day = start_at
+                .get(..10)
+                .filter(|day| NaiveDate::parse_from_str(day, "%Y-%m-%d").is_ok())
+                .map(str::to_string)
+                .unwrap_or_else(|| today.to_string());
             tx.execute(
                 "UPDATE focus_sessions SET active_seconds=active_seconds+?2 WHERE id=?1",
                 params![id, applied],
             )?;
             tx.execute(
                 "INSERT INTO focus_daily(date,seconds) VALUES(?1,?2) ON CONFLICT(date) DO UPDATE SET seconds=focus_daily.seconds+excluded.seconds",
-                params![today.to_string(), applied],
+                params![session_day, applied],
             )?;
         }
         if applied >= remaining {
@@ -632,8 +650,11 @@ impl Database {
             params![today.to_string()],
             |r| r.get(0),
         ).unwrap_or(0);
+        // Completed counts stay on the session's start day so a session that
+        // crosses midnight is not counted under today while its time belongs to
+        // yesterday (today_total and focus_daily already use the start day).
         let completed = c.query_row(
-            "SELECT COUNT(*) FROM focus_sessions WHERE status='completed' AND substr(COALESCE(end_at,start_at),1,10)=?1",
+            "SELECT COUNT(*) FROM focus_sessions WHERE status='completed' AND substr(start_at,1,10)=?1",
             params![today.to_string()],
             |r| r.get(0),
         ).unwrap_or(0);
@@ -766,6 +787,11 @@ impl Database {
             let end_ts=Local.from_local_datetime(&end_day.and_hms_opt(0,0,0).unwrap()).latest().unwrap().timestamp();
             let rec_start=start.timestamp(); let rec_end=end.timestamp();
             let total_span=(rec_end-rec_start).max(1);
+            // Seconds this record contributes to `today`. Only this much may be
+            // split across today's hours: the old code added the record's
+            // out-of-day remainder to the last hour, so a session that started
+            // yesterday made today's final hour absorb yesterday's time.
+            let allowed=r.overlap_seconds(today,today);
             let mut allocated=0i64;
             let mut last_hour: Option<usize>=None;
             for h in 0u32..24 {
@@ -781,7 +807,7 @@ impl Database {
                 }
             }
             if let Some(h)=last_hour {
-                out[h].1 += (r.seconds-allocated).max(0);
+                out[h].1 += (allowed-allocated).max(0);
             }
         }
         Ok(out)
@@ -1148,6 +1174,16 @@ fn request_shutdown() {
             let _ = std::fs::create_dir_all(parent);
         }
         let _ = std::fs::write(path, b"shutdown");
+    }
+}
+
+/// A shutdown flag is a one-shot signal for the collector that is running right
+/// now. A freshly started process must clear any leftover flag before it starts
+/// recording: otherwise its first loop iteration sees the stale flag and returns,
+/// leaving a tray-only process whose collector thread is dead forever.
+fn clear_shutdown_flag() {
+    if let Some(path) = shutdown_path() {
+        let _ = std::fs::remove_file(path);
     }
 }
 
@@ -1628,6 +1664,10 @@ fn main()->Result<()> {
         return Ok(());
     }
 
+    // This process is the long-running collector. A flag left behind by the
+    // previous session must not stop this one on its first tick.
+    clear_shutdown_flag();
+
     let db=Arc::new(Database::new()?);
     let snap=Arc::new(Mutex::new(Snapshot::default()));
 
@@ -1849,6 +1889,96 @@ mod tests {
         Database::validate_focus(&parsed.focus_sessions, &parsed.focus_daily).unwrap();
         db.replace_all_records(&parsed.records, &parsed.focus_sessions, &parsed.focus_daily).unwrap();
         assert_eq!(db.focus_history_all().unwrap().len(), 150, "import restores every session");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn hourly_today_does_not_absorb_previous_day_time() {
+        let (root, db) = temp_database("hourly-midnight");
+        let today = Local::now().date_naive();
+        let yesterday = today - ChronoDuration::days(1);
+        let start = Local.from_local_datetime(&yesterday.and_hms_opt(22, 0, 0).unwrap()).earliest().unwrap();
+        let end = Local.from_local_datetime(&today.and_hms_opt(2, 0, 0).unwrap()).earliest().unwrap();
+        {
+            let c = db.conn().expect("open connection");
+            c.execute(
+                "INSERT INTO usage_records(start_at,end_at,record_date,app,exe_path,seconds,precision,source,source_key,session_id)
+                 VALUES(?1,?2,?3,'player.exe','',14400,'precise','test','test:midnight',1)",
+                rusqlite::params![start.to_rfc3339(), end.to_rfc3339(), yesterday.to_string()],
+            ).expect("insert cross-midnight record");
+        }
+
+        let hours = db.hourly_today(today).unwrap();
+        let total: i64 = hours.iter().map(|(_, seconds)| *seconds).sum();
+        assert_eq!(total, 7200, "only today's half of the session may be charted");
+        assert_eq!(hours[0].1, 3600);
+        assert_eq!(hours[1].1, 3600);
+        assert_eq!(hours[2].1, 0);
+        assert_eq!(hours[23].1, 0, "yesterday's time must not land in today's late hours");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn import_closes_live_focus_sessions_instead_of_resurrecting_them() {
+        let (root, db) = temp_database("import-live-focus");
+        let today = Local::now().date_naive();
+        let live = vec![
+            FocusHistoryRecord {
+                id: 0,
+                start_at: format!("{today}T09:00:00+08:00"),
+                end_at: None,
+                planned_seconds: 1500,
+                active_seconds: 300,
+                pause_count: 0,
+                status: "active".to_string(),
+            },
+            FocusHistoryRecord {
+                id: 0,
+                start_at: format!("{today}T10:00:00+08:00"),
+                end_at: None,
+                planned_seconds: 1500,
+                active_seconds: 300,
+                pause_count: 1,
+                status: "paused".to_string(),
+            },
+        ];
+
+        db.replace_all_records(&[], &live, &[]).unwrap();
+        let rows = db.focus_history_all().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|row| row.status == "stopped"));
+        assert!(rows.iter().all(|row| row.end_at.is_some()));
+
+        let state = db.focus_state(today, true).unwrap();
+        assert!(!state.0, "import must not resurrect a live focus session");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn completed_focus_counts_stay_on_the_session_start_day() {
+        let (root, db) = temp_database("focus-midnight");
+        let today = Local::now().date_naive();
+        let yesterday = today - ChronoDuration::days(1);
+        let start = Local.from_local_datetime(&yesterday.and_hms_opt(23, 50, 0).unwrap()).earliest().unwrap();
+        let end = Local.from_local_datetime(&today.and_hms_opt(0, 10, 0).unwrap()).earliest().unwrap();
+        {
+            let c = db.conn().expect("open connection");
+            c.execute(
+                "INSERT INTO focus_sessions(start_at,end_at,planned_seconds,active_seconds,pause_count,status)
+                 VALUES(?1,?2,1200,1200,0,'completed')",
+                rusqlite::params![start.to_rfc3339(), end.to_rfc3339()],
+            ).expect("insert cross-midnight focus session");
+        }
+
+        let today_state = db.focus_state(today, true).unwrap();
+        let yesterday_state = db.focus_state(yesterday, true).unwrap();
+        assert_eq!(today_state.6, 0, "today's total excludes a session started yesterday");
+        assert_eq!(today_state.7, 0, "today's completed count follows the start day");
+        assert_eq!(yesterday_state.6, 1200);
+        assert_eq!(yesterday_state.7, 1);
 
         let _ = std::fs::remove_dir_all(root);
     }
