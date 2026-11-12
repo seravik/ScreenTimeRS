@@ -25,6 +25,12 @@ pause.flag
 shutdown.flag
 *.log
 
+# Local build scripts and handover docs (not tracked)
+/build.rs
+/build-installer.bat
+/build-windows.bat
+/PROJECT-HANDOVER.md
+
 # Local tooling and workspace state
 .cargo/
 .workbuddy/
