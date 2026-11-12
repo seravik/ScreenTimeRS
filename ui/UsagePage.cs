@@ -67,6 +67,7 @@ public sealed class UsagePage : Page
     bool _updatingRange;
     long _listMax = 1;
     readonly List<AppRow> _rows = new();
+    string _selectedAppName = "";
 
     sealed class AppRow
     {
@@ -75,6 +76,7 @@ public sealed class UsagePage : Page
         public TextBlock Time = null!;
         public Border Fill = null!;
         public Grid Host = null!;
+        public Button Button = null!;
     }
 
     public UsagePage(Func<string[], Task<string?>> query)
@@ -711,19 +713,25 @@ public sealed class UsagePage : Page
             .Where(a => a.seconds >= 60)
             .Where(a => filter.Length == 0 || UiHelpers.FriendlyName(a, _language).Contains(filter, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(a => a.seconds)
+            .ThenBy(a => a.name, StringComparer.Ordinal)
             .ToArray();
 
-        // Identity (range, search, app names and their order) drives rebuilding.
-        // Seconds are deliberately excluded: they change every snapshot, and
-        // including them used to tear down and rebuild the whole list every two
-        // seconds (flicker, lost scroll position, repeated icon work).
-        var signature = _appRange.SelectedIndex + "|" + (_search.Text ?? "") + "|" + string.Join(';', filtered.Select(a => a.name));
-        if (string.Equals(signature, _listSignature, StringComparison.Ordinal) && _rows.Count == filtered.Length)
+        // Identity is based on the SET of apps (names sorted alphabetically),
+        // not on their display order. Two apps whose usage crossed each other
+        // between snapshots used to swap display order, change the signature,
+        // and force a full teardown/rebuild of every button — that destroyed
+        // hover and press state and made the list flicker and hard to click.
+        // Now the order can change without a rebuild; we just reorder the
+        // existing buttons in place.
+        var setSignature = _appRange.SelectedIndex + "|" + filter + "|" +
+            string.Join(';', filtered.Select(a => a.name).OrderBy(n => n, StringComparer.Ordinal));
+        if (string.Equals(setSignature, _listSignature, StringComparison.Ordinal) && _rows.Count == filtered.Length)
         {
+            ReorderRows(filtered);
             UpdateAppRowValues(filtered);
             return;
         }
-        _listSignature = signature;
+        _listSignature = setSignature;
 
         _list.Children.Clear();
         _rows.Clear();
@@ -792,15 +800,69 @@ public sealed class UsagePage : Page
                 Background = new SolidColorBrush(UIColor.FromArgb(0, 0, 0, 0)),
                 BorderThickness = new Thickness(0)
             };
-            button.Click += async (_, _) => await ShowDetail(app, total);
+
+            var appRow = new AppRow { App = app, Max = _listMax, Time = time, Fill = fill, Host = barHost, Button = button };
+            // Read the current app from the row at click time so the detail
+            // always shows live data instead of the snapshot captured when the
+            // row was built.
+            button.Click += async (_, _) =>
+            {
+                var current = appRow.App;
+                var currentTotal = CurrentTotal(CurrentApps());
+                await ShowDetail(current, currentTotal);
+            };
             _list.Children.Add(button);
 
-            var appRow = new AppRow { App = app, Max = _listMax, Time = time, Fill = fill, Host = barHost };
             barHost.SizeChanged += (_, _) => UpdateRowBar(appRow);
             _rows.Add(appRow);
         }
+        UpdateSelectedRowHighlight();
         foreach (var row in _rows)
             UpdateRowBar(row);
+    }
+
+    /// <summary>
+    /// Reorders the existing buttons (and their backing rows) to match the new
+    /// sort order without recreating them. Called when the set of apps is the
+    /// same but their usage-driven order changed. Uses UIElementCollection.Move
+    /// so buttons never leave the visual tree — Clear()+Readd() used to drop
+    /// hover state every two seconds (a button re-added under the cursor does
+    /// not know the pointer is there until the next PointerMoved).
+    /// </summary>
+    void ReorderRows(AppStat[] filtered)
+    {
+        if (_rows.Count != filtered.Length)
+            return;
+
+        // Fast path: order already matches — do not touch the visual tree.
+        var alreadyOrdered = true;
+        for (int i = 0; i < _rows.Count; i++)
+        {
+            if (!string.Equals(_rows[i].App.name, filtered[i].name, StringComparison.Ordinal))
+            {
+                alreadyOrdered = false;
+                break;
+            }
+        }
+        if (alreadyOrdered)
+            return;
+
+        // Map each app name to its desired position, then insertion-sort both
+        // the row list and the visual children with Move (no teardown).
+        var desired = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < filtered.Length; i++)
+            desired[filtered[i].name] = i;
+
+        for (int i = 1; i < _rows.Count; i++)
+        {
+            var j = i;
+            while (j > 0 && desired[_rows[j].App.name] < desired[_rows[j - 1].App.name])
+            {
+                (_rows[j], _rows[j - 1]) = (_rows[j - 1], _rows[j]);
+                _list.Children.Move((uint)j, (uint)(j - 1));
+                j--;
+            }
+        }
     }
 
     void UpdateAppRowValues(AppStat[] filtered)
@@ -818,6 +880,17 @@ public sealed class UsagePage : Page
             row.Time.Text = UiHelpers.Format(filtered[i].seconds, _language);
             UpdateRowBar(row);
         }
+        UpdateSelectedRowHighlight();
+    }
+
+    void UpdateSelectedRowHighlight()
+    {
+        foreach (var row in _rows)
+        {
+            var selected = string.Equals(row.App.name, _selectedAppName, StringComparison.Ordinal);
+            row.Button.Background = new SolidColorBrush(
+                selected ? UIColor.FromArgb(24, _accent.R, _accent.G, _accent.B) : UIColor.FromArgb(0, 0, 0, 0));
+        }
     }
 
     static void UpdateRowBar(AppRow row)
@@ -825,6 +898,8 @@ public sealed class UsagePage : Page
 
     async Task ShowDetail(AppStat app, long total)
     {
+        _selectedAppName = app.name;
+        UpdateSelectedRowHighlight();
         _detailKey = app.name;
         _detail.Children.Clear();
         _detailEmpty.Visibility = Visibility.Collapsed;

@@ -18,7 +18,7 @@ namespace ScreenTimeRS.UI;
 /// </summary>
 public sealed class SettingsPage : Page
 {
-    const string Version = "0.9.3";
+    const string Version = "0.9.4";
     const string RepositoryUrl = "https://github.com/wuchen128/ScreenTimeRS";
 
     readonly TextBlock _title;

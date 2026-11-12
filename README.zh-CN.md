@@ -1,6 +1,12 @@
-# ScreenTime RS v0.9.3
+# ScreenTime RS v0.9.4
 
 ScreenTime RS 是一款面向 Windows 的本地屏幕使用时间与应用使用统计工具，采用 **Rust 监控核心 + WinUI 3 / Fluent UI** 架构。使用数据保存在本机 SQLite 数据库中，并通过 Windows 桌面界面进行展示。
+
+## v0.9.4
+
+- 趋势柱状图在所有时间范围下保持统一粗细；较长时间段支持横向滚动，并默认定位到最近日期。
+- 应用列表原地更新而非每次刷新重建，鼠标悬停时不再闪烁，点击也能准确命中目标行；选中行会高亮显示。
+- 构建脚本与安装包工程不再纳入仓库跟踪。
 
 ## v0.9.3
 
@@ -110,7 +116,7 @@ dist\ui\screentime-rs.exe
 输出：
 
 ```text
-installer-output\ScreenTimeRS-v0.9.3-Setup.exe
+installer-output\ScreenTimeRS-v0.9.4-Setup.exe
 ```
 
 ## 使用数据备份
@@ -155,7 +161,7 @@ ScreenTime RS 不会主动将使用统计数据上传到远程服务器。
 
 ## 当前版本
 
-**v0.9.3**
+**v0.9.4**
 
 ### 统一使用数据模型
 
