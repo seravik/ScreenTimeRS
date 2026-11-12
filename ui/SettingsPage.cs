@@ -343,17 +343,7 @@ public sealed class SettingsPage : Page
 
     /// <summary>Paints a button as a solid red danger action, matching the
     /// confirmation dialog's primary button.</summary>
-    static void StyleDeleteButton(Button button)
-    {
-        var danger = new SolidColorBrush(UIColor.FromArgb(255, 196, 43, 28));
-        var style = new Style(typeof(Button));
-        if (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var baseStyle) && baseStyle is Style defaultStyle)
-            style.BasedOn = defaultStyle;
-        style.Setters.Add(new Setter(Button.BackgroundProperty, danger));
-        style.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Microsoft.UI.Colors.White)));
-        style.Setters.Add(new Setter(Button.BorderBrushProperty, danger));
-        button.Style = style;
-    }
+    static void StyleDeleteButton(Button button) => button.Style = Ui.DangerButtonStyle();
 
     static bool StartupEnabled()
     {

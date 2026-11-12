@@ -32,7 +32,6 @@ public sealed partial class MainWindow : Window
     private readonly string _snapshotPath;
     private readonly string _analyticsPath;
     private readonly string _shutdownPath;
-    private Process? _collector;
     private ThemeMode _themeMode;
     private LanguageMode _languageMode;
 
@@ -473,7 +472,7 @@ public sealed partial class MainWindow : Window
 
                 if (SnapshotIsFresh())
                 {
-                    _collector = p;
+                    p.Dispose();
                     return;
                 }
 
@@ -495,7 +494,7 @@ public sealed partial class MainWindow : Window
                 finally { stale.Dispose(); }
             }
 
-            _collector = Process.Start(new ProcessStartInfo(fullExe, "--background")
+            using var started = Process.Start(new ProcessStartInfo(fullExe, "--background")
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -975,7 +974,7 @@ public sealed partial class MainWindow : Window
             var valid = string.Equals(input.Text.Trim(), code, StringComparison.Ordinal);
             dialog.IsPrimaryButtonEnabled = valid;
             dialog.PrimaryButtonStyle = valid
-                ? CreateDangerButtonStyle()
+                ? Ui.DangerButtonStyle()
                 : null;
         }
 
@@ -997,7 +996,7 @@ public sealed partial class MainWindow : Window
             },
             PrimaryButtonText = UiText.DeleteAction(UiLanguage),
             CloseButtonText = UiText.Cancel(UiLanguage),
-            PrimaryButtonStyle = CreateDangerButtonStyle(),
+            PrimaryButtonStyle = Ui.DangerButtonStyle(),
             XamlRoot = ContentFrame.XamlRoot
         };
 
@@ -1010,19 +1009,6 @@ public sealed partial class MainWindow : Window
             UiText.DeleteFailed(UiLanguage));
         if (ok)
             await RefreshAfterDataChangeAsync();
-    }
-
-    private static Style CreateDangerButtonStyle()
-    {
-        var style = new Style(typeof(Button));
-        if (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var baseStyle) && baseStyle is Style defaultStyle)
-            style.BasedOn = defaultStyle;
-
-        var danger = new SolidColorBrush(Color.FromArgb(255, 196, 43, 28));
-        style.Setters.Add(new Setter(Button.BackgroundProperty, danger));
-        style.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Microsoft.UI.Colors.White)));
-        style.Setters.Add(new Setter(Button.BorderBrushProperty, danger));
-        return style;
     }
 
     private string CollectorExecutablePath()

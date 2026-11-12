@@ -1201,10 +1201,29 @@ fn clear_shutdown_flag() {
 fn write_json_atomic(path: std::path::PathBuf, text: String) {
     if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
     let tmp = path.with_extension("tmp");
-    if std::fs::write(&tmp, text).is_ok() {
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::rename(&tmp, &path);
+    if std::fs::write(&tmp, text).is_err() {
+        return;
     }
+    // Rename straight over the destination so readers never observe a missing
+    // snapshot. On Windows this maps to MoveFileEx(MOVEFILE_REPLACE_EXISTING),
+    // which fails while a reader holds the file without delete sharing, so
+    // retry briefly before falling back to remove-then-rename.
+    for _ in 0..10 {
+        if std::fs::rename(&tmp, &path).is_ok() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::rename(&tmp, &path);
+}
+
+/// The UI generates six characters from this alphabet. Accepting any 6-32
+/// character string made the CLI's second confirmation gate meaningless.
+fn is_valid_confirmation_code(token: &str) -> bool {
+    const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    token.len() == 6
+        && token.bytes().all(|b| ALPHABET.contains(&b.to_ascii_uppercase()))
 }
 
 fn write_snapshot(s: &Snapshot) {
@@ -1558,7 +1577,7 @@ fn handle_cli(args: &[String]) -> Result<bool> {
         }
         Some("--clear-data") => {
             let token = args.get(2).map(String::as_str).unwrap_or("");
-            if token.len() < 6 || token.len() > 32 {
+            if !is_valid_confirmation_code(token) {
                 anyhow::bail!("invalid confirmation token");
             }
             let db = Database::new()?;
@@ -1967,6 +1986,16 @@ mod tests {
         assert!(!state.0, "import must not resurrect a live focus session");
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn confirmation_code_rejects_arbitrary_tokens() {
+        assert!(is_valid_confirmation_code("ABC234"));
+        assert!(is_valid_confirmation_code("abc234"), "lower case input is normalised");
+        assert!(!is_valid_confirmation_code("ABC23"), "too short");
+        assert!(!is_valid_confirmation_code("ABC2345"), "too long");
+        assert!(!is_valid_confirmation_code("ABC230"), "'0' is not in the UI alphabet");
+        assert!(!is_valid_confirmation_code("ABC-34"));
     }
 
     #[test]

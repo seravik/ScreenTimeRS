@@ -55,6 +55,22 @@ internal static class Ui
 
     public static SolidColorBrush Brush(UIColor color) => new(color);
 
+    public static readonly UIColor DangerColor = UIColor.FromArgb(255, 196, 43, 28);
+
+    /// <summary>Solid red button used by destructive actions and their
+    /// confirmation dialogs.</summary>
+    public static Style DangerButtonStyle()
+    {
+        var style = new Style(typeof(Button));
+        if (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var baseStyle) && baseStyle is Style defaultStyle)
+            style.BasedOn = defaultStyle;
+        var danger = new SolidColorBrush(DangerColor);
+        style.Setters.Add(new Setter(Button.BackgroundProperty, danger));
+        style.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Microsoft.UI.Colors.White)));
+        style.Setters.Add(new Setter(Button.BorderBrushProperty, danger));
+        return style;
+    }
+
     public static SolidColorBrush Subtle(UIColor color, byte alpha) =>
         new(UIColor.FromArgb(alpha, color.R, color.G, color.B));
 
