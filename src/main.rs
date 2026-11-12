@@ -1023,6 +1023,47 @@ fn system_ui_language_is_english() -> bool {
 #[cfg(not(windows))]
 fn system_ui_language_is_english() -> bool { true }
 
+/// The UI stores terms acceptance in HKCU. Collection must not start before
+/// that: the installer can add a background auto-start entry, and a user who
+/// has never opened the app has not agreed to anything yet.
+#[cfg(windows)]
+fn terms_accepted() -> bool {
+    use windows::core::w;
+    use windows::Win32::Foundation::WIN32_ERROR;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE,
+        REG_DWORD, REG_VALUE_TYPE,
+    };
+    unsafe {
+        let mut key = HKEY::default();
+        let opened = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            w!("Software\\ScreenTimeRS"),
+            Some(0),
+            KEY_QUERY_VALUE,
+            &mut key,
+        );
+        if opened != WIN32_ERROR(0) {
+            return false;
+        }
+        let mut kind = REG_VALUE_TYPE::default();
+        let mut value = 0u32;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        let queried = RegQueryValueExW(
+            key,
+            w!("TermsAccepted_v0_9_2"),
+            None,
+            Some(&mut kind),
+            Some(&mut value as *mut u32 as *mut u8),
+            Some(&mut size),
+        );
+        let _ = RegCloseKey(key);
+        queried == WIN32_ERROR(0) && kind == REG_DWORD && value == 1
+    }
+}
+#[cfg(not(windows))]
+fn terms_accepted() -> bool { true }
+
 #[derive(serde::Serialize, Clone)]
 struct JsonApp { name: String, seconds: i64, exe_path: String }
 
@@ -1697,6 +1738,11 @@ fn main()->Result<()> {
     // This process is the long-running collector. A flag left behind by the
     // previous session must not stop this one on its first tick.
     clear_shutdown_flag();
+
+    // Never record before the user has accepted the terms in the UI.
+    if !terms_accepted() {
+        return Ok(());
+    }
 
     let db=Arc::new(Database::new()?);
     let snap=Arc::new(Mutex::new(Snapshot::default()));
