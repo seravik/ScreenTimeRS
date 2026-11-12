@@ -23,8 +23,16 @@
 ## 2. 当前状态
 
 - **当前版本**：v0.9.3（已发布，annotated tag `v0.9.3`，commit `2de505b`，Release id `441792392`，资产 `ScreenTimeRS-v0.9.3-Setup.exe`，60,618,881 bytes，SHA256 `68c9654c66a5bc74937fd9ae68a92a4fe59521ffce78582a6cd6d848a240aaa6`）。
-- **最新提交**：`b61d8f0 refactor(ui): rebuild settings page and drop pause/location/diagnostics`（已推送）。
-- **工作区状态**：存在两处**未提交**改动 —— `ui/SettingsPage.cs`、`ui/Str.cs`（设置页排版重构为 Win11 系统设置风格，尚未 commit）。
+- **当前分支状态**：`main` 已包含本轮全部修复，工作区干净（本文件随收尾改动一起提交）。
+- **v0.9.3 之后新增的提交**（按顺序）：
+  1. `refactor(ui)`：设置页改为 Win11 系统设置风格。
+  2. `fix`：修复残留 `shutdown.flag` 杀死后台采集线程；修正跨午夜小时图与专注归属；导入不再复活 `active/paused` 专注会话。
+  3. `perf(ui)`：使用页缓存 60 秒刷新、数据变更即时失效；列表原地更新不再每 2 秒重建；主题色同步；专注历史刷新排队；托盘/兜底页 i18n。
+  4. `chore`：`--clear-data` 确认码按 UI 字母表校验；危险按钮样式收敛到 `Ui`；构建加 `--locked`；`.iss` 版本号派生；快照写入改为覆盖式 rename + 重试。
+  5. `docs`：交接文档入库。
+  6. `fix`：未同意条款前不采集。
+  7. 采集状态提示（概览页横幅）+ 启动项路径一致性校验。
+- **自动化验证**：`cargo test --locked` 7 个用例通过；`dotnet build` 0 警告 0 错误。
 
 ### 版本号一致性清单（发版时逐项核对）
 
@@ -55,6 +63,7 @@
 - `screentime-rs.exe` 是**采集线程、SQLite、托盘的唯一所有者**。
 - WinUI 前端**只读 JSON 快照 + 按需启动 CLI 子进程**，**不得另起采集循环**。
 - IPC 为**本地文件**（JSON 快照 / flag 文件），**非管道、非 Socket**。
+- **同意条款前不得采集**：采集进程启动时读取 HKCU `Software\ScreenTimeRS\TermsAccepted_v0_9_2`（DWORD=1），未同意或读取失败则直接退出（不建托盘、不写库）。前端只在用户同意后才调用 `StartCollector`。
 
 ```
 ┌─────────────────────────────┐      JSON 快照      ┌──────────────────────────┐
@@ -138,7 +147,7 @@
 
 1. **构建必须把 MinGW bin 与 `~/.cargo/bin` 加进 PATH**，否则 linker 找不到。
 2. `cargo test/build` 要设 `CARGO_PROFILE_DEV_DEBUG=0`（否则 rusqlite/windows 会卡死，已实测 25 分钟零 CPU）。
-3. `cargo build --release --locked` 编译 Rust 核心。
+3. `cargo build --release --locked` 编译 Rust 核心；提交前跑 `cargo test --locked`（7 个用例，覆盖跨午夜归属、导入、确认码等）。
 4. `dotnet build` / `dotnet publish -c Release -o dist/ui` 编译前端。
 5. ISCC 编译安装包（约 105 秒，会输出大量中文语言文件 warning，均非错误）。
 
@@ -192,8 +201,14 @@
 
 ## 9. 下一步建议
 
-1. **提交未提交的排版改动**：`ui/SettingsPage.cs` + `ui/Str.cs`（设置页 Win11 风格重构），提交并推送。
+1. **手动端到端验证**（本轮改动主要是单测 + 编译验证）：
+   - 托盘退出 → 重新打开 UI，确认后台采集恢复（P0 回归项）。
+   - 跨 0 点使用同一应用，检查概览小时图与今日总时长一致。
+   - 导入 / 清空数据后，使用页趋势与"全部时间"立即刷新。
+   - 删除 `HKCU\Software\ScreenTimeRS\TermsAccepted_v0_9_2` 后运行 `--background`，应无托盘、无新数据；在 UI 同意后恢复。
+   - 移动安装目录后，设置页"随 Windows 启动"应显示为关闭。
 2. 若需发新版（v0.9.4+），严格走「版本号一致性清单 + 法律文本版本策略 + 发布前杀进程 + Git Data API 绕代理」流程。
+3. 可选优化：托盘语言跟随应用内语言（当前只能跟随 Windows 显示语言）；`focus_daily` 表目前只写不读，可在未来 schema 变更时清理。
 
 ---
 

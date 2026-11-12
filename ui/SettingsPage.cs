@@ -345,12 +345,22 @@ public sealed class SettingsPage : Page
     /// confirmation dialog's primary button.</summary>
     static void StyleDeleteButton(Button button) => button.Style = Ui.DangerButtonStyle();
 
+    static string StartupCommand()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
+        return $"\"{exe}\" --background";
+    }
+
     static bool StartupEnabled()
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            return key?.GetValue("ScreenTimeRS") is string value && !string.IsNullOrWhiteSpace(value);
+            // A value left over from a previous install path must read as off,
+            // otherwise the toggle claims tracking starts with Windows while the
+            // stored command points at an executable that no longer exists.
+            return key?.GetValue("ScreenTimeRS") is string value
+                && string.Equals(value.Trim(), StartupCommand(), StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
     }
@@ -361,11 +371,7 @@ public sealed class SettingsPage : Page
         {
             using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             if (key == null) return;
-            if (enabled)
-            {
-                var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
-                key.SetValue("ScreenTimeRS", $"\"{exe}\" --background");
-            }
+            if (enabled) key.SetValue("ScreenTimeRS", StartupCommand());
             else key.DeleteValue("ScreenTimeRS", false);
         }
         catch { }

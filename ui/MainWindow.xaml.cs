@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     private readonly string _snapshotPath;
     private readonly string _analyticsPath;
     private readonly string _shutdownPath;
+    private readonly DateTime _startedAt = DateTime.Now;
     private ThemeMode _themeMode;
     private LanguageMode _languageMode;
 
@@ -541,6 +542,9 @@ public sealed partial class MainWindow : Window
             {
                 var snapshot = LoadSnapshot() ?? new Snapshot();
                 UpdatePages(snapshot);
+                // Grace period avoids a warning flash while the collector starts.
+                _overviewPage.SetCollectorRunning(
+                    SnapshotIsFresh() || (DateTime.Now - _startedAt).TotalSeconds < 15);
             });
         }
     }

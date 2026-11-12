@@ -20,6 +20,8 @@ public sealed class OverviewPage : Page
     readonly TextBlock title, todayLabel, todayValue;
     readonly TextBlock currentLabel, currentValue, longestLabel, longestValue, unlockLabel, unlockValue;
     readonly TextBlock hourlyTitle, topTitle, topEmpty;
+    readonly Border collectorBanner;
+    readonly TextBlock collectorBannerText;
     readonly Border[] hourBars = new Border[24];
     readonly Grid[] hourCells = new Grid[24];
     readonly double[] hourHeights = new double[24];
@@ -159,8 +161,21 @@ public sealed class OverviewPage : Page
         topStack.Children.Add(topEmpty);
         topStack.Children.Add(topList);
 
+        collectorBannerText = new TextBlock { FontSize = Ui.CaptionSize, TextWrapping = TextWrapping.Wrap };
+        collectorBanner = new Border
+        {
+            Child = collectorBannerText,
+            Padding = new Thickness(12, 10, 12, 10),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(UIColor.FromArgb(20, 196, 43, 28)),
+            BorderBrush = new SolidColorBrush(UIColor.FromArgb(70, 196, 43, 28)),
+            BorderThickness = new Thickness(1),
+            Visibility = Visibility.Collapsed
+        };
+
         var root = new StackPanel { Spacing = Ui.CardGap, Padding = Ui.PagePadding };
         root.Children.Add(header);
+        root.Children.Add(collectorBanner);
         root.Children.Add(Ui.Card(todayCard));
         root.Children.Add(Ui.Card(hourStack));
         root.Children.Add(Ui.Card(topStack));
@@ -172,6 +187,22 @@ public sealed class OverviewPage : Page
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
     }
+
+    /// <summary>Shows a warning when no fresh snapshot is being written, which
+    /// means the collector is not recording (missing, crashed or never started).</summary>
+    public void SetCollectorRunning(bool running)
+    {
+        collectorBanner.Visibility = running ? Visibility.Collapsed : Visibility.Visible;
+        if (!running)
+            collectorBannerText.Text = CollectorWarningText();
+    }
+
+    string CollectorWarningText() => _language switch
+    {
+        LanguageMode.English => "Tracking is not running, so screen time is not being recorded. Try restarting the app.",
+        LanguageMode.TraditionalChinese => "資料擷取未執行，目前不會記錄螢幕使用時間。請嘗試重新啟動應用程式。",
+        _ => "数据采集未运行，当前不会记录屏幕时间。请尝试重启应用。"
+    };
 
     static TextBlock MetricValue() => new()
     {
@@ -206,6 +237,7 @@ public sealed class OverviewPage : Page
         hourlyTitle.Text = Str.Overview.ByHour(language);
         topTitle.Text = Str.Overview.TopApps(language);
         topEmpty.Text = Str.Overview.NoApps(language);
+        collectorBannerText.Text = CollectorWarningText();
         _topSignature = "";
         UpdateSnapshot(_snapshot ?? new Snapshot());
     }
