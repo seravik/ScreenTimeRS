@@ -9,34 +9,6 @@ internal static class Str
 {
     internal static class Common
     {
-        public static string Pause(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Pause",
-            LanguageMode.TraditionalChinese => "暫停",
-            _ => "暂停"
-        };
-
-        public static string Resume(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Resume",
-            LanguageMode.TraditionalChinese => "繼續",
-            _ => "继续"
-        };
-
-        public static string Recording(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Recording",
-            LanguageMode.TraditionalChinese => "記錄中",
-            _ => "记录中"
-        };
-
-        public static string Paused(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Paused",
-            LanguageMode.TraditionalChinese => "已暫停",
-            _ => "已暂停"
-        };
-
         public static string Hours(LanguageMode l) => l switch
         {
             LanguageMode.English => "h",
@@ -228,20 +200,6 @@ internal static class Str
             _ => "显示语言"
         };
 
-        public static string Recording(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Recording",
-            LanguageMode.TraditionalChinese => "記錄狀態",
-            _ => "记录状态"
-        };
-
-        public static string RecordingHint(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Pausing stops new usage from being counted. The overview header offers the same control.",
-            LanguageMode.TraditionalChinese => "暫停後不再累計新的使用時間，概覽頂部提供相同的控制項。",
-            _ => "暂停后不再累计新的使用时间，概览顶部提供同样的控制。"
-        };
-
         public static string Data(LanguageMode l) => l switch
         {
             LanguageMode.English => "Data",
@@ -291,34 +249,6 @@ internal static class Str
             _ => "删除全部数据"
         };
 
-        public static string Location(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Data location",
-            LanguageMode.TraditionalChinese => "資料位置",
-            _ => "数据位置"
-        };
-
-        public static string LocationHint(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Records, snapshots and automatic import backups live here.",
-            LanguageMode.TraditionalChinese => "使用記錄、快照與匯入前的自動備份會存放在此。",
-            _ => "使用记录、快照与导入前的自动备份存放在这里。"
-        };
-
-        public static string OpenFolder(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Open folder",
-            LanguageMode.TraditionalChinese => "開啟資料夾",
-            _ => "打开文件夹"
-        };
-
-        public static string Backup(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Create backup",
-            LanguageMode.TraditionalChinese => "建立備份",
-            _ => "创建备份"
-        };
-
         public static string About(LanguageMode l) => l switch
         {
             LanguageMode.English => "About",
@@ -333,25 +263,11 @@ internal static class Str
             _ => $"ScreenTime RS {version} · Rust 核心 + WinUI 3"
         };
 
-        public static string Diagnostics(LanguageMode l) => l switch
+        public static string ViewSource(LanguageMode l) => l switch
         {
-            LanguageMode.English => "Diagnostics",
-            LanguageMode.TraditionalChinese => "診斷",
-            _ => "诊断"
-        };
-
-        public static string DiagnosticsHint(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "Check database size, record count and collector state.",
-            LanguageMode.TraditionalChinese => "檢查資料庫大小、記錄數量與收集器狀態。",
-            _ => "检查数据库大小、记录数量与采集状态。"
-        };
-
-        public static string ViewDiagnostics(LanguageMode l) => l switch
-        {
-            LanguageMode.English => "View diagnostics",
-            LanguageMode.TraditionalChinese => "檢視診斷",
-            _ => "查看诊断"
+            LanguageMode.English => "View source on GitHub",
+            LanguageMode.TraditionalChinese => "在 GitHub 查看原始碼",
+            _ => "在 GitHub 查看源码"
         };
 
         public static string Terms(LanguageMode l) => l switch

@@ -36,13 +36,13 @@ The Software does not intentionally collect, record, or transmit:
 - Location data, advertising identifiers, hardware fingerprints, or account credentials.
 
 ## 5. How Recording Works
-The monitoring core samples the foreground window approximately once per second, resolves the owning process, and accumulates active time for that application. Accumulation stops while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused by you, and while the device is asleep or shut down. Sampling gaps are capped so that a suspended session cannot be recorded as a long usage block. Focus time uses the same activity conditions but is kept as a separate metric.
+The monitoring core samples the foreground window approximately once per second, resolves the owning process, and accumulates active time for that application. Accumulation stops while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused, and while the device is asleep or shut down. Sampling gaps are capped so that a suspended session cannot be recorded as a long usage block. Focus time uses the same activity conditions but is kept as a separate metric.
 
 ## 6. Purposes
 Stored information is used only to operate the Software and to provide its features: daily summaries, per-application totals and rankings, hourly and multi-period charts, continuous-use and unlock measurements, focus timers and focus history, import and export, local backups, and diagnostics.
 
 ## 7. Storage Location and Format
-By default, data is stored under the current Windows user's local application-data directory, in the ScreenTime RS data folder. The exact path is shown in the Settings page, and the folder can be opened from there. Records are kept in a local SQLite database, with JSON files used for snapshots, exports, analytics, and backups. The database is not encrypted by the application; see Section 10.
+By default, data is stored under the current Windows user's local application-data directory, in the ScreenTime RS data folder. The data folder lives under your Windows profile. Records are kept in a local SQLite database, with JSON files used for snapshots, exports, analytics, and backups. The database is not encrypted by the application; see Section 10.
 
 ## 8. Retention
 Usage and focus records remain on the device until you delete them or remove the underlying files. The Software does not silently delete historical records because they become numerous or old. Interface limits, such as showing only the most recent focus records on the main Focus page, are presentation limits and do not delete data.
@@ -63,7 +63,7 @@ Windows, security software, backup and sync tools, device administrators, and ot
 The Software is a general-purpose local utility and is not directed at children. It is not designed to collect information about children or other protected groups. Parents, guardians, organizations, and device administrators are responsible for ensuring that any monitoring they carry out is lawful in their jurisdiction and is accompanied by the notices and consents that applicable law requires.
 
 ## 14. Your Controls
-You can pause and resume recording, view the data location, open the data folder, export records, import records, create backups, delete individual records, clear history, delete all data, and uninstall the Software. You can also delete the data folder directly with Windows. Uninstalling removes the application but not necessarily the data folder or exported files.
+You can export records, import records, delete individual records, clear history, delete all data, and uninstall the Software. You can also delete the data folder directly with Windows. Uninstalling removes the application but not necessarily the data folder or exported files.
 
 ## 15. International Users
 Because the Software does not transmit records off the device, no international transfer of records is carried out by the Software. If you export records and move them to another service or jurisdiction, you are responsible for that transfer and for complying with the rules that apply to it.

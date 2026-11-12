@@ -16,10 +16,9 @@ public sealed class OverviewPage : Page
 {
     const double ChartHeight = 120;
 
-    readonly TextBlock title, status, todayLabel, todayValue;
+    readonly TextBlock title, todayLabel, todayValue;
     readonly TextBlock currentLabel, currentValue, longestLabel, longestValue, unlockLabel, unlockValue;
     readonly TextBlock hourlyTitle, topTitle, topEmpty;
-    readonly Button pauseButton;
     readonly Border[] hourBars = new Border[24];
     readonly Grid[] hourCells = new Grid[24];
     readonly double[] hourHeights = new double[24];
@@ -33,29 +32,15 @@ public sealed class OverviewPage : Page
     UIColor _accent = UIColor.FromArgb(255, 0, 0, 0);
     Snapshot? _snapshot;
     string _topSignature = "";
-    bool _paused;
     int _hoverIndex = -1;
-
-    public event EventHandler? PauseToggleRequested;
 
     public OverviewPage()
     {
         title = Ui.PageTitle("");
-        status = Ui.Caption("");
-        status.VerticalAlignment = VerticalAlignment.Center;
-
-        pauseButton = new Button { HorizontalAlignment = HorizontalAlignment.Right };
-        pauseButton.Click += (_, _) => PauseToggleRequested?.Invoke(this, EventArgs.Empty);
 
         var header = new Grid { ColumnSpacing = 12 };
         header.ColumnDefinitions.Add(new ColumnDefinition());
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(status, 1);
-        Grid.SetColumn(pauseButton, 2);
         header.Children.Add(title);
-        header.Children.Add(status);
-        header.Children.Add(pauseButton);
 
         todayLabel = Ui.Caption("");
         todayValue = Ui.Value("");
@@ -210,8 +195,6 @@ public sealed class OverviewPage : Page
         hourlyTitle.Text = Str.Overview.ByHour(language);
         topTitle.Text = Str.Overview.TopApps(language);
         topEmpty.Text = Str.Overview.NoApps(language);
-        pauseButton.Content = _paused ? Str.Common.Resume(language) : Str.Common.Pause(language);
-        status.Text = _paused ? Str.Common.Paused(language) : Str.Common.Recording(language);
         _topSignature = "";
         UpdateSnapshot(_snapshot ?? new Snapshot());
     }
@@ -231,13 +214,6 @@ public sealed class OverviewPage : Page
         SetText(currentValue, UiHelpers.Format(Math.Max(0, s.current_session_seconds), _language));
         SetText(longestValue, UiHelpers.Format(Math.Max(0, s.longest_session_today), _language));
         SetText(unlockValue, s.unlocks_today.ToString());
-        SetText(status, s.paused ? Str.Common.Paused(_language) : Str.Common.Recording(_language));
-
-        if (s.paused != _paused)
-        {
-            _paused = s.paused;
-            pauseButton.Content = _paused ? Str.Common.Resume(_language) : Str.Common.Pause(_language);
-        }
 
         UpdateHourly(s);
         UpdateTopApps(s);

@@ -110,7 +110,6 @@ public sealed partial class MainWindow : Window
         ThemeManager.ApplyAccent(accent);
 
         _overviewPage = new OverviewPage();
-        _overviewPage.PauseToggleRequested += (_, _) => TogglePause();
         _usagePage = new UsagePage(RunCollectorQueryAsync);
         _focusHistoryPage = new FocusHistoryPage(LoadFocusHistoryAsync, RunCollectorCommandAsync, () => { }, RefreshRecentFocusHistory);
         _focusHistoryPage.ApplyAccent(accent);
@@ -122,9 +121,6 @@ public sealed partial class MainWindow : Window
         _settingsPage.ExportDataRequested += SettingsPage_ExportDataRequested;
         _settingsPage.ImportDataRequested += SettingsPage_ImportDataRequested;
         _settingsPage.DeleteAllDataRequested += SettingsPage_DeleteAllDataRequested;
-        _settingsPage.PauseRequested += SettingsPage_PauseRequested;
-        _settingsPage.BackupRequested += SettingsPage_BackupRequested;
-        _settingsPage.DiagnosticsRequested += SettingsPage_DiagnosticsRequested;
         _focusShell = new FocusShellPage(GetFocusContent, _focusHistoryPage);
         ApplyAccent(accent);
 
@@ -294,48 +290,6 @@ public sealed partial class MainWindow : Window
             });
         }
         catch { }
-    }
-
-    private void SettingsPage_PauseRequested(object? sender, EventArgs e) => TogglePause();
-
-    private void TogglePause()
-    {
-        try
-        {
-            var pausePath = Path.Combine(Path.GetDirectoryName(_shutdownPath)!, "pause.flag");
-            if (File.Exists(pausePath)) File.Delete(pausePath); else File.WriteAllText(pausePath, "paused");
-            File.WriteAllText(Path.Combine(Path.GetDirectoryName(pausePath)!, "refresh.flag"), "refresh");
-        }
-        catch { }
-    }
-
-    private async void SettingsPage_BackupRequested(object? sender, EventArgs e)
-    {
-        try
-        {
-            var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
-            var psi = new ProcessStartInfo(exe, "--backup") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
-            using var process = Process.Start(psi);
-            var path = process == null ? "" : await process.StandardOutput.ReadToEndAsync();
-            if (process != null) await process.WaitForExitAsync();
-            var en = UiLanguage == LanguageMode.English; var hant = UiLanguage == LanguageMode.TraditionalChinese;
-            var dialog = new ContentDialog { Title = en ? "Backup created" : hant ? "備份已建立" : "备份已创建", Content = path.Trim(), CloseButtonText = en ? "OK" : hant ? "確定" : "确定", XamlRoot = ContentFrame.XamlRoot };
-            await dialog.ShowAsync();
-        } catch { }
-    }
-
-    private async void SettingsPage_DiagnosticsRequested(object? sender, EventArgs e)
-    {
-        try
-        {
-            var exe = Path.Combine(AppContext.BaseDirectory, "screentime-rs.exe");
-            var psi = new ProcessStartInfo(exe, "--diagnostics") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
-            using var process = Process.Start(psi); var text = process == null ? "" : await process.StandardOutput.ReadToEndAsync();
-            if (process != null) await process.WaitForExitAsync();
-            var en = UiLanguage == LanguageMode.English; var hant = UiLanguage == LanguageMode.TraditionalChinese;
-            var dialog = new ContentDialog { Title = en ? "Diagnostics" : hant ? "診斷信息" : "诊断信息", Content = new ScrollViewer { MaxHeight = 420, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } }, CloseButtonText = en ? "Close" : hant ? "關閉" : "关闭", XamlRoot = ContentFrame.XamlRoot };
-            await dialog.ShowAsync();
-        } catch { }
     }
 
     private void ApplyAccent(Color color)
@@ -678,7 +632,6 @@ public sealed partial class MainWindow : Window
 
         _lastFocusCompletedCount = (int)Math.Max(0, s.focus_today_completed);
         _latestSnapshot = s;
-        _settingsPage.SetMonitoringState(s.paused);
 
         if (justCompleted)
             PlayFocusCompletionSound();

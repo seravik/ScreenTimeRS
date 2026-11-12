@@ -58,7 +58,7 @@ Subject to the project licence and these Terms, you may install and use the Soft
 The Software is intended to help a user record and review their own activity on their own device. You must not use the Software to monitor another person covertly, or without a lawful basis and any notice or consent required by applicable law, contract, or policy. Where the Software is deployed by an organization, the deployer is responsible for providing required notices, obtaining required consents, and complying with labour, privacy, and data-protection law. The Project does not provide, endorse, or authorize covert surveillance of any person.
 
 ## 6. What the Software Records
-The monitoring core samples the foreground window at an interval of approximately one second, identifies the process that owns that window, and stores the process name and, when it can be resolved, the executable path, together with accumulated active seconds and timestamps. The current window title is read in memory while resolving the foreground application and is not written to the database. Accumulation pauses while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused by the user, and while the device is asleep or shut down. The Software does not capture screen contents, keystrokes, clipboard contents, audio, camera input, browsing history, document contents, or message contents, and it does not transmit data over a network.
+The monitoring core samples the foreground window at an interval of approximately one second, identifies the process that owns that window, and stores the process name and, when it can be resolved, the executable path, together with accumulated active seconds and timestamps. The current window title is read in memory while resolving the foreground application and is not written to the database. Accumulation pauses while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused, and while the device is asleep or shut down. The Software does not capture screen contents, keystrokes, clipboard contents, audio, camera input, browsing history, document contents, or message contents, and it does not transmit data over a network.
 
 ## 7. Focus Feature
 The Focus feature is a local timer and productivity aid. It is not a security control, parental-control system, access-control system, application blocker, or disciplinary tool. Starting a focus session does not prevent you or anyone else from opening or switching applications. Focus time is counted only while the conditions in Section 6 are met, so a focus session may record less elapsed time than its wall-clock duration.
@@ -151,13 +151,13 @@ The Software does not intentionally collect, record, or transmit:
 - Location data, advertising identifiers, hardware fingerprints, or account credentials.
 
 ## 5. How Recording Works
-The monitoring core samples the foreground window approximately once per second, resolves the owning process, and accumulates active time for that application. Accumulation stops while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused by you, and while the device is asleep or shut down. Sampling gaps are capped so that a suspended session cannot be recorded as a long usage block. Focus time uses the same activity conditions but is kept as a separate metric.
+The monitoring core samples the foreground window approximately once per second, resolves the owning process, and accumulates active time for that application. Accumulation stops while the workstation is locked, while there has been no user input for approximately 60 seconds, while recording is paused, and while the device is asleep or shut down. Sampling gaps are capped so that a suspended session cannot be recorded as a long usage block. Focus time uses the same activity conditions but is kept as a separate metric.
 
 ## 6. Purposes
 Stored information is used only to operate the Software and to provide its features: daily summaries, per-application totals and rankings, hourly and multi-period charts, continuous-use and unlock measurements, focus timers and focus history, import and export, local backups, and diagnostics.
 
 ## 7. Storage Location and Format
-By default, data is stored under the current Windows user's local application-data directory, in the ScreenTime RS data folder. The exact path is shown in the Settings page, and the folder can be opened from there. Records are kept in a local SQLite database, with JSON files used for snapshots, exports, analytics, and backups. The database is not encrypted by the application; see Section 10.
+By default, data is stored under the current Windows user's local application-data directory, in the ScreenTime RS data folder. The data folder lives under your Windows profile. Records are kept in a local SQLite database, with JSON files used for snapshots, exports, analytics, and backups. The database is not encrypted by the application; see Section 10.
 
 ## 8. Retention
 Usage and focus records remain on the device until you delete them or remove the underlying files. The Software does not silently delete historical records because they become numerous or old. Interface limits, such as showing only the most recent focus records on the main Focus page, are presentation limits and do not delete data.
@@ -178,7 +178,7 @@ Windows, security software, backup and sync tools, device administrators, and ot
 The Software is a general-purpose local utility and is not directed at children. It is not designed to collect information about children or other protected groups. Parents, guardians, organizations, and device administrators are responsible for ensuring that any monitoring they carry out is lawful in their jurisdiction and is accompanied by the notices and consents that applicable law requires.
 
 ## 14. Your Controls
-You can pause and resume recording, view the data location, open the data folder, export records, import records, create backups, delete individual records, clear history, delete all data, and uninstall the Software. You can also delete the data folder directly with Windows. Uninstalling removes the application but not necessarily the data folder or exported files.
+You can export records, import records, delete individual records, clear history, delete all data, and uninstall the Software. You can also delete the data folder directly with Windows. Uninstalling removes the application but not necessarily the data folder or exported files.
 
 ## 15. International Users
 Because the Software does not transmit records off the device, no international transfer of records is carried out by the Software. If you export records and move them to another service or jurisdiction, you are responsible for that transfer and for complying with the rules that apply to it.
@@ -212,7 +212,7 @@ ScreenTime RS is maintained at https://github.com/wuchen128/ScreenTimeRS, where 
 本软件用于帮助用户记录和查看其本人在自有设备上的活动。您不得在未告知他人或缺乏合法依据的情况下秘密监控他人，也不得规避适用法律、合同或政策所要求的告知与同意义务。若本软件由组织部署，部署方负责提供必要告知、取得必要同意，并遵守劳动、隐私与数据保护法律。本项目不提供、不认可、也不授权对任何人进行秘密监控。
 
 ## 6. 本软件记录的内容
-监控核心以约一秒的间隔采样前台窗口，识别拥有该窗口的进程，并保存进程名称以及在可解析时的可执行文件路径，同时保存累计的活跃秒数与时间戳。当前窗口标题仅在识别前台应用的过程中于内存中读取，不会写入数据库。当工作站被锁定、约 60 秒内无用户输入、用户暂停记录，或设备休眠、关机时，累计会停止。本软件不截取屏幕内容、不记录键盘输入、不读取剪贴板、不采集音频或摄像头数据、不读取浏览历史、文档内容或消息内容，也不会通过网络传输数据。
+监控核心以约一秒的间隔采样前台窗口，识别拥有该窗口的进程，并保存进程名称以及在可解析时的可执行文件路径，同时保存累计的活跃秒数与时间戳。当前窗口标题仅在识别前台应用的过程中于内存中读取，不会写入数据库。当工作站被锁定、约 60 秒内无用户输入、记录暂停，或设备休眠、关机时，累计会停止。本软件不截取屏幕内容、不记录键盘输入、不读取剪贴板、不采集音频或摄像头数据、不读取浏览历史、文档内容或消息内容，也不会通过网络传输数据。
 
 ## 7. 专注功能
 专注功能是本地计时器与生产力辅助工具。它不是安全控制、家长控制、访问控制、应用屏蔽或纪律管理工具。开始专注不会阻止您或他人打开或切换应用。专注时间仅在满足第 6 条所述条件时计入，因此一次专注记录的时间可能少于其实际经过的时间。
@@ -288,7 +288,7 @@ ScreenTime RS 名称、项目材料、源代码、文档、美术资源及其他
 本軟體用於協助使用者記錄及檢視其本人在自有裝置上的活動。您不得在未告知他人或缺乏合法依據的情況下秘密監控他人，也不得規避適用法律、契約或政策所要求的告知與同意義務。若本軟體由組織部署，部署方負責提供必要告知、取得必要同意，並遵守勞動、隱私與資料保護法律。本專案不提供、不認可、亦不授權對任何人進行秘密監控。
 
 ## 6. 本軟體記錄的內容
-監控核心以約一秒的間隔取樣前景視窗，識別擁有該視窗的處理程序，並儲存處理程序名稱以及在可解析時的可執行檔路徑，同時儲存累計的活躍秒數與時間戳記。目前視窗標題僅在識別前景應用程式的過程中於記憶體中讀取，不會寫入資料庫。當工作站被鎖定、約 60 秒內無使用者輸入、使用者暫停記錄，或裝置休眠、關機時，累計會停止。本軟體不擷取螢幕內容、不記錄鍵盤輸入、不讀取剪貼簿、不蒐集音訊或攝影機資料、不讀取瀏覽歷史、文件內容或訊息內容，也不會透過網路傳輸資料。
+監控核心以約一秒的間隔取樣前景視窗，識別擁有該視窗的處理程序，並儲存處理程序名稱以及在可解析時的可執行檔路徑，同時儲存累計的活躍秒數與時間戳記。目前視窗標題僅在識別前景應用程式的過程中於記憶體中讀取，不會寫入資料庫。當工作站被鎖定、約 60 秒內無使用者輸入、記錄暫停，或裝置休眠、關機時，累計會停止。本軟體不擷取螢幕內容、不記錄鍵盤輸入、不讀取剪貼簿、不蒐集音訊或攝影機資料、不讀取瀏覽歷史、文件內容或訊息內容，也不會透過網路傳輸資料。
 
 ## 7. 專注功能
 專注功能是本機計時器與生產力輔助工具。它不是安全控制、家長控制、存取控制、應用程式封鎖或紀律管理工具。開始專注不會阻止您或他人開啟或切換應用程式。專注時間僅在符合第 6 條所述條件時計入，因此一次專注記錄的時間可能少於其實際經過的時間。
@@ -381,13 +381,13 @@ ScreenTime RS 是一款本地 Windows 应用，用于记录并展示屏幕使用
 - 位置数据、广告标识符、硬件指纹或账户凭据。
 
 ## 5. 记录方式
-监控核心约每秒采样一次前台窗口，识别所属进程，并为该应用累计活跃时间。当工作站被锁定、约 60 秒内无用户输入、您暂停记录，或设备休眠、关机时，累计会停止。采样间隔造成的缺口会被限制，因此挂起的会话不会被记录为一段很长的使用时间。专注时间使用相同的活动条件，但作为独立指标保存。
+监控核心约每秒采样一次前台窗口，识别所属进程，并为该应用累计活跃时间。当工作站被锁定、约 60 秒内无用户输入、记录暂停，或设备休眠、关机时，累计会停止。采样间隔造成的缺口会被限制，因此挂起的会话不会被记录为一段很长的使用时间。专注时间使用相同的活动条件，但作为独立指标保存。
 
 ## 6. 处理目的
 存储的信息仅用于运行本软件并提供其功能：每日摘要、按应用汇总与排行、按小时与多周期图表、连续使用与解锁统计、专注计时器与专注历史、导入与导出、本地备份以及诊断。
 
 ## 7. 存储位置与格式
-默认情况下，数据保存在当前 Windows 用户本地应用数据目录下的 ScreenTime RS 数据文件夹中。确切路径显示在设置页面，也可以从设置中打开该文件夹。记录保存在本地 SQLite 数据库中，快照、导出、分析与备份则使用 JSON 文件。数据库未由应用加密，详见第 10 条。
+默认情况下，数据保存在当前 Windows 用户本地应用数据目录下的 ScreenTime RS 数据文件夹中。数据文件夹位于您的 Windows 用户配置目录下。记录保存在本地 SQLite 数据库中，快照、导出、分析与备份则使用 JSON 文件。数据库未由应用加密，详见第 10 条。
 
 ## 8. 保留期限
 使用记录与专注记录会一直保留在设备上，直到您删除它们或移除底层文件。本软件不会因为历史记录数量变多或时间变旧而静默删除记录。界面限制，例如主专注页面只显示最近的专注记录，仅属于展示限制，不会删除数据。
@@ -408,7 +408,7 @@ Windows、安全软件、备份与同步工具、设备管理员以及同一设�
 本软件是通用型本地工具，并非面向儿童。它并非为收集儿童或其他受保护群体的信息而设计。父母、监护人、组织与设备管理员负责确保其进行的任何监控在其司法管辖区内合法，并附带适用法律要求的告知与同意。
 
 ## 14. 您的控制手段
-您可以暂停与恢复记录、查看数据位置、打开数据文件夹、导出记录、导入记录、创建备份、删除单条记录、清理历史、删除全部数据以及卸载本软件。您也可以直接用 Windows 删除数据文件夹。卸载会移除应用，但不一定移除数据文件夹或导出文件。
+您可以导出记录、导入记录、删除单条记录、清理历史、删除全部数据以及卸载本软件。您也可以直接用 Windows 删除数据文件夹。卸载会移除应用，但不一定移除数据文件夹或导出文件。
 
 ## 15. 国际用户
 由于本软件不会将记录传输到设备之外，本软件不进行记录的国际传输。若您导出记录并将其转移到其他服务或司法管辖区，该传输由您负责，您也需遵守适用于该传输的规则。
@@ -459,13 +459,13 @@ ScreenTime RS 是一款本機 Windows 應用程式，用於記錄並顯示螢幕
 - 位置資料、廣告識別碼、硬體指紋或帳戶憑證。
 
 ## 5. 記錄方式
-監控核心約每秒取樣一次前景視窗，識別所屬處理程序，並為該應用程式累計活躍時間。當工作站被鎖定、約 60 秒內無使用者輸入、您暫停記錄，或裝置休眠、關機時，累計會停止。取樣間隔造成的缺口會被限制，因此暫停的作業不會被記錄為一段很長的使用時間。專注時間使用相同的活動條件，但作為獨立指標儲存。
+監控核心約每秒取樣一次前景視窗，識別所屬處理程序，並為該應用程式累計活躍時間。當工作站被鎖定、約 60 秒內無使用者輸入、記錄暫停，或裝置休眠、關機時，累計會停止。取樣間隔造成的缺口會被限制，因此暫停的作業不會被記錄為一段很長的使用時間。專注時間使用相同的活動條件，但作為獨立指標儲存。
 
 ## 6. 處理目的
 儲存的資訊僅用於執行本軟體並提供其功能：每日摘要、按應用程式彙總與排行、每小時與多週期圖表、連續使用與解鎖統計、專注計時器與專注歷史、匯入與匯出、本機備份以及診斷。
 
 ## 7. 儲存位置與格式
-預設情況下，資料儲存於目前 Windows 使用者本機應用程式資料目錄下的 ScreenTime RS 資料夾中。確切路徑顯示於設定頁面，也可以從設定中開啟該資料夾。記錄儲存於本機 SQLite 資料庫中，快照、匯出、分析與備份則使用 JSON 檔案。資料庫未由應用程式加密，詳見第 10 條。
+預設情況下，資料儲存於目前 Windows 使用者本機應用程式資料目錄下的 ScreenTime RS 資料夾中。資料夾位於您的 Windows 使用者設定檔目錄下。記錄儲存於本機 SQLite 資料庫中，快照、匯出、分析與備份則使用 JSON 檔案。資料庫未由應用程式加密，詳見第 10 條。
 
 ## 8. 保留期限
 使用記錄與專注記錄會一直保留在裝置上，直到您刪除它們或移除底層檔案。本軟體不會因為歷史記錄數量變多或時間變舊而靜默刪除記錄。介面限制，例如主專注頁面只顯示最近的專注記錄，僅屬於呈現限制，不會刪除資料。
@@ -486,7 +486,7 @@ Windows、安全性軟體、備份與同步工具、裝置管理員以及同一�
 本軟體是通用型本機工具，並非針對兒童設計。它並非為蒐集兒童或其他受保護群體的資訊而設計。父母、監護人、組織與裝置管理員負責確保其進行的任何監控在其司法管轄區內合法，並附帶適用法律要求的告知與同意。
 
 ## 14. 您的控制方式
-您可以暫停與恢復記錄、檢視資料位置、開啟資料夾、匯出記錄、匯入記錄、建立備份、刪除單筆記錄、清理歷史、刪除全部資料以及解除安裝本軟體。您也可以直接使用 Windows 刪除資料夾。解除安裝會移除應用程式，但不一定移除資料夾或匯出檔案。
+您可以匯出記錄、匯入記錄、刪除單筆記錄、清理歷史、刪除全部資料以及解除安裝本軟體。您也可以直接使用 Windows 刪除資料夾。解除安裝會移除應用程式，但不一定移除資料夾或匯出檔案。
 
 ## 15. 國際使用者
 由於本軟體不會將記錄傳送到裝置之外，本軟體不進行記錄的國際傳輸。若您匯出記錄並將其轉移到其他服務或司法管轄區，該傳輸由您負責，您也需遵守適用於該傳輸的規則。
