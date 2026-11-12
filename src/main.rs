@@ -1012,6 +1012,17 @@ fn active_now(locked: bool, idle: u64, app: &str) -> bool {
     !locked && idle < ACTIVE_IDLE_LIMIT_SECS && !app.is_empty()
 }
 
+/// The collector cannot read the UI's language preference (it lives in the
+/// UI's registry settings), so the tray follows the Windows display language.
+#[cfg(windows)]
+fn system_ui_language_is_english() -> bool {
+    use windows::Win32::Globalization::GetUserDefaultUILanguage;
+    let lang = unsafe { GetUserDefaultUILanguage() };
+    (lang & 0x3FF) != 0x04
+}
+#[cfg(not(windows))]
+fn system_ui_language_is_english() -> bool { true }
+
 #[derive(serde::Serialize, Clone)]
 struct JsonApp { name: String, seconds: i64, exe_path: String }
 
@@ -1728,7 +1739,8 @@ fn main()->Result<()> {
 
     let menu=Menu::new();
     let show=IconMenuItem::new("ScreenTime RS", true, Some(tray_menu_icon()), None);
-    let quit=tray_icon::menu::MenuItem::new("退出",true,None);
+    let quit_label = if system_ui_language_is_english() { "Quit" } else { "退出" };
+    let quit=tray_icon::menu::MenuItem::new(quit_label,true,None);
     menu.append(&show)?;
     menu.append(&PredefinedMenuItem::separator())?;
     menu.append(&quit)?;

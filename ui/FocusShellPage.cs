@@ -105,6 +105,14 @@ public sealed class FocusShellPage : Page
         _tabs.SetAccent(color);
     }
 
+    /// <summary>Reloads both the recent list and the full history list.</summary>
+    public void RefreshHistory()
+    {
+        if (_focusContent is FocusPage page)
+            page.RefreshHistory();
+        _history.Refresh();
+    }
+
     void Show(int index)
     {
         _selected = index;

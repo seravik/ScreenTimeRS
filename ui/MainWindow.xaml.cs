@@ -1100,12 +1100,15 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshAfterDataChangeAsync()
     {
+        // Import and delete replace every record, so the usage page's cached
+        // all-time query and both focus history lists must be refetched too.
+        _usagePage.InvalidateData();
+        _focusShell.RefreshHistory();
         for (int i = 0; i < 6; i++)
         {
             await Task.Delay(300);
             UpdatePages(LoadSnapshot() ?? new Snapshot());
         }
-
     }
 
     private async Task ShowDataOperationResultAsync(bool success, string successText, string failedText)

@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UIColor = Windows.UI.Color;
 
@@ -33,6 +34,16 @@ public sealed class OverviewPage : Page
     Snapshot? _snapshot;
     string _topSignature = "";
     int _hoverIndex = -1;
+    readonly List<TopRow> _topRows = new();
+
+    sealed class TopRow
+    {
+        public AppStat App = new();
+        public long Max = 1;
+        public TextBlock Time = null!;
+        public Border Fill = null!;
+        public Grid Host = null!;
+    }
 
     public OverviewPage()
     {
@@ -205,6 +216,10 @@ public sealed class OverviewPage : Page
         var brush = Ui.Brush(color);
         foreach (var bar in hourBars)
             bar.Background = brush;
+        // Top-app bars are only rebuilt when the app set changes, so repaint
+        // their fill here or they keep the previous theme's accent.
+        foreach (var row in _topRows)
+            row.Fill.Background = brush;
     }
 
     public void UpdateSnapshot(Snapshot s)
@@ -251,19 +266,26 @@ public sealed class OverviewPage : Page
     void UpdateTopApps(Snapshot s)
     {
         var top = s.apps.Where(a => a.seconds > 0).OrderByDescending(a => a.seconds).Take(5).ToArray();
-        var signature = string.Join('|', top.Select(a => a.name + ":" + a.seconds));
-        if (string.Equals(signature, _topSignature, StringComparison.Ordinal))
-            return;
-        _topSignature = signature;
-
-        topList.Children.Clear();
-        if (top.Length == 0)
+        // Only the app set and its order force a rebuild. Seconds change every
+        // snapshot, so including them rebuilt the whole list every two seconds.
+        var signature = string.Join('|', top.Select(a => a.name));
+        if (string.Equals(signature, _topSignature, StringComparison.Ordinal) && _topRows.Count == top.Length)
         {
-            topEmpty.Visibility = Visibility.Visible;
+            UpdateTopAppValues(top);
             return;
         }
+        _topSignature = signature;
+        RebuildTopApps(top);
+    }
 
-        topEmpty.Visibility = Visibility.Collapsed;
+    void RebuildTopApps(AppStat[] top)
+    {
+        topList.Children.Clear();
+        _topRows.Clear();
+        topEmpty.Visibility = top.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (top.Length == 0)
+            return;
+
         var max = Math.Max(1, top[0].seconds);
         foreach (var app in top)
         {
@@ -304,17 +326,39 @@ public sealed class OverviewPage : Page
             var barHost = new Grid();
             barHost.Children.Add(track);
             barHost.Children.Add(fill);
-            barHost.SizeChanged += (_, _) =>
-            {
-                fill.Width = Math.Max(0, barHost.ActualWidth * app.seconds / (double)max);
-            };
 
             var stack = new StackPanel { Spacing = 5 };
             stack.Children.Add(row);
             stack.Children.Add(barHost);
             topList.Children.Add(stack);
+
+            var topRow = new TopRow { App = app, Max = max, Time = time, Fill = fill, Host = barHost };
+            barHost.SizeChanged += (_, _) => UpdateTopBar(topRow);
+            _topRows.Add(topRow);
+        }
+        foreach (var topRow in _topRows)
+            UpdateTopBar(topRow);
+    }
+
+    void UpdateTopAppValues(AppStat[] top)
+    {
+        topEmpty.Visibility = top.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (top.Length == 0)
+            return;
+
+        var max = Math.Max(1, top[0].seconds);
+        for (int i = 0; i < _topRows.Count && i < top.Length; i++)
+        {
+            var topRow = _topRows[i];
+            topRow.App = top[i];
+            topRow.Max = max;
+            topRow.Time.Text = UiHelpers.Format(top[i].seconds, _language);
+            UpdateTopBar(topRow);
         }
     }
+
+    static void UpdateTopBar(TopRow row)
+        => row.Fill.Width = Math.Max(0, row.Host.ActualWidth * row.App.seconds / (double)Math.Max(1, row.Max));
 
     void ShowHover(int index)
     {

@@ -55,12 +55,23 @@ public sealed class UsagePage : Page
     Snapshot _snapshot = new();
 
     JsonDaily[] _dailyAll = Array.Empty<JsonDaily>();
-    bool _dailyAllLoaded;
     RangeUsageResponse? _allRange;
     DayUsageResponse? _dayRange;
+    DateTime _allDataLoadedUtc = DateTime.MinValue;
     string _listSignature = "";
     string _detailKey = "";
     bool _updatingRange;
+    long _listMax = 1;
+    readonly List<AppRow> _rows = new();
+
+    sealed class AppRow
+    {
+        public AppStat App = new();
+        public long Max = 1;
+        public TextBlock Time = null!;
+        public Border Fill = null!;
+        public Grid Host = null!;
+    }
 
     public UsagePage(Func<string[], Task<string?>> query)
     {
@@ -303,6 +314,43 @@ public sealed class UsagePage : Page
             UpdateTrends();
         else
             RenderAppList();
+
+        // The page loads all-time data through a CLI query rather than the
+        // snapshot. Refresh it at most once a minute so a long-running window
+        // does not keep showing the numbers it saw at launch.
+        if (DateTime.UtcNow - _allDataLoadedUtc >= TimeSpan.FromSeconds(60))
+            _ = RefreshAllDataAsync();
+    }
+
+    /// <summary>
+    /// Drops the cached all-time query so an import or a full delete becomes
+    /// visible without restarting the app.
+    /// </summary>
+    public void InvalidateData()
+    {
+        _dailyAll = Array.Empty<JsonDaily>();
+        _allRange = null;
+        _dayRange = null;
+        _allDataLoadedUtc = DateTime.MinValue;
+        _trendSignature = "";
+        _listSignature = "";
+        _ = RefreshAfterDataChangeAsync();
+    }
+
+    async Task RefreshAfterDataChangeAsync()
+    {
+        await EnsureAllDataAsync();
+        UpdateTrends();
+        await RefreshAppDataAsync();
+    }
+
+    async Task RefreshAllDataAsync()
+    {
+        await EnsureAllDataAsync();
+        if (_showTrends)
+            UpdateTrends();
+        else
+            RenderAppList();
     }
 
     static Button TabButton(TextBlock label, out Border underline)
@@ -360,10 +408,21 @@ public sealed class UsagePage : Page
         RenderAppList();
     }
 
-    async Task EnsureDailyAll()
+    Task EnsureDailyAll() => EnsureAllDataAsync();
+
+    Task EnsureAllRange() => EnsureAllDataAsync();
+
+    /// <summary>
+    /// Loads `--query-all` once and reuses it for totals, trends and the
+    /// all-time app list. A timestamp throttles reloads (and retries after a
+    /// failed query) to once a minute.
+    /// </summary>
+    async Task EnsureAllDataAsync()
     {
-        if (_dailyAllLoaded)
+        if (DateTime.UtcNow - _allDataLoadedUtc < TimeSpan.FromSeconds(60))
             return;
+        _allDataLoadedUtc = DateTime.UtcNow;
+
         var text = await _query(new[] { "--query-all" });
         if (text is null)
             return;
@@ -374,19 +433,8 @@ public sealed class UsagePage : Page
                 return;
             _dailyAll = data.daily ?? Array.Empty<JsonDaily>();
             _allRange = data;
-            _dailyAllLoaded = true;
         }
         catch { }
-    }
-
-    async Task EnsureAllRange()
-    {
-        if (_allRange is not null)
-            return;
-        var text = await _query(new[] { "--query-all" });
-        if (text is null)
-            return;
-        try { _allRange = JsonSerializer.Deserialize<RangeUsageResponse>(text); } catch { }
     }
 
     async Task OnTrendRangeChanged()
@@ -591,17 +639,25 @@ public sealed class UsagePage : Page
             .OrderByDescending(a => a.seconds)
             .ToArray();
 
-        var signature = _appRange.SelectedIndex + "|" + (_search.Text ?? "") + "|" + string.Join(';', filtered.Select(a => a.name + ":" + a.seconds));
-        if (string.Equals(signature, _listSignature, StringComparison.Ordinal) && _list.Children.Count > 0)
+        // Identity (range, search, app names and their order) drives rebuilding.
+        // Seconds are deliberately excluded: they change every snapshot, and
+        // including them used to tear down and rebuild the whole list every two
+        // seconds (flicker, lost scroll position, repeated icon work).
+        var signature = _appRange.SelectedIndex + "|" + (_search.Text ?? "") + "|" + string.Join(';', filtered.Select(a => a.name));
+        if (string.Equals(signature, _listSignature, StringComparison.Ordinal) && _rows.Count == filtered.Length)
+        {
+            UpdateAppRowValues(filtered);
             return;
+        }
         _listSignature = signature;
 
         _list.Children.Clear();
+        _rows.Clear();
         _listEmpty.Visibility = filtered.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (filtered.Length == 0)
             return;
 
-        var max = Math.Max(1, filtered[0].seconds);
+        _listMax = Math.Max(1, filtered[0].seconds);
         foreach (var app in filtered)
         {
             var row = new Grid { ColumnSpacing = 12 };
@@ -648,7 +704,6 @@ public sealed class UsagePage : Page
             var barHost = new Grid();
             barHost.Children.Add(track);
             barHost.Children.Add(fill);
-            barHost.SizeChanged += (_, _) => fill.Width = Math.Max(0, barHost.ActualWidth * app.seconds / (double)max);
 
             var stack = new StackPanel { Spacing = 5, Padding = new Thickness(6, 6, 6, 6) };
             stack.Children.Add(row);
@@ -665,8 +720,34 @@ public sealed class UsagePage : Page
             };
             button.Click += async (_, _) => await ShowDetail(app, total);
             _list.Children.Add(button);
+
+            var appRow = new AppRow { App = app, Max = _listMax, Time = time, Fill = fill, Host = barHost };
+            barHost.SizeChanged += (_, _) => UpdateRowBar(appRow);
+            _rows.Add(appRow);
+        }
+        foreach (var row in _rows)
+            UpdateRowBar(row);
+    }
+
+    void UpdateAppRowValues(AppStat[] filtered)
+    {
+        _listEmpty.Visibility = filtered.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (filtered.Length == 0)
+            return;
+
+        _listMax = Math.Max(1, filtered[0].seconds);
+        for (int i = 0; i < _rows.Count && i < filtered.Length; i++)
+        {
+            var row = _rows[i];
+            row.App = filtered[i];
+            row.Max = _listMax;
+            row.Time.Text = UiHelpers.Format(filtered[i].seconds, _language);
+            UpdateRowBar(row);
         }
     }
+
+    static void UpdateRowBar(AppRow row)
+        => row.Fill.Width = Math.Max(0, row.Host.ActualWidth * row.App.seconds / (double)Math.Max(1, row.Max));
 
     async Task ShowDetail(AppStat app, long total)
     {

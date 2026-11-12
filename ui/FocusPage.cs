@@ -49,7 +49,11 @@ public sealed class FocusPage : Page
     private bool _lastFocusActive;
     private DateTime _completionMessageUntilUtc = DateTime.MinValue;
     private bool _historyLoadStarted;
+    private bool _historyReloadPending;
     private bool _pageReady;
+    private TextBlock? _fallbackTitle;
+    private TextBlock? _fallbackBody;
+    private TextBlock? _fallbackHint;
     // Keep the main card compact: only the latest ten records are shown here.
     // The full history is available on a dedicated page.
     private const int RecentHistoryLimit = 10;
@@ -83,18 +87,16 @@ public sealed class FocusPage : Page
 
     private void BuildFallbackPage()
     {
+        _fallbackTitle = new TextBlock { FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        _fallbackBody = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        _fallbackHint = new TextBlock { Opacity = .68, TextWrapping = TextWrapping.Wrap };
         Content = new Border
         {
             Padding = new Thickness(28),
             Child = new StackPanel
             {
                 Spacing = 12,
-                Children =
-                {
-                    new TextBlock { Text = "专注", FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-                    new TextBlock { Text = "专注页面暂时无法加载。", TextWrapping = TextWrapping.Wrap },
-                    new TextBlock { Text = "其他功能仍可正常使用。", Opacity = .68, TextWrapping = TextWrapping.Wrap }
-                }
+                Children = { _fallbackTitle, _fallbackBody, _fallbackHint }
             }
         };
     }
@@ -321,9 +323,25 @@ public sealed class FocusPage : Page
     public void ApplyLanguage(LanguageMode language)
     {
         _language = LanguageResolver.Resolve(language);
-        if (!_pageReady) return;
         var en = _language == LanguageMode.English;
         var hant = _language == LanguageMode.TraditionalChinese;
+
+        if (!_pageReady)
+        {
+            // The fallback page is built before the language is known, so it
+            // follows later language switches instead of staying Chinese.
+            if (_fallbackTitle is not null)
+                _fallbackTitle.Text = en ? "Focus" : hant ? "專注" : "专注";
+            if (_fallbackBody is not null)
+                _fallbackBody.Text = en
+                    ? "The Focus page could not be loaded."
+                    : hant ? "專注頁面無法載入。" : "专注页面无法加载。";
+            if (_fallbackHint is not null)
+                _fallbackHint.Text = en
+                    ? "Other features remain available."
+                    : hant ? "其他功能仍可正常使用。" : "其他功能仍可正常使用。";
+            return;
+        }
 
         _title.Text = en ? "Focus" : hant ? "專注" : "专注";
         _subtitle.Text = en
@@ -587,7 +605,14 @@ public sealed class FocusPage : Page
     {
         _ = reset; // Main history is always reloaded as the latest 10 records.
 
-        if (!_pageReady || _historyLoadStarted) return;
+        if (!_pageReady) return;
+        if (_historyLoadStarted)
+        {
+            // Do not drop a refresh that arrives while a load is in flight;
+            // run once more when the current load finishes.
+            _historyReloadPending = true;
+            return;
+        }
         _historyLoadStarted = true;
         try
         {
@@ -602,7 +627,15 @@ public sealed class FocusPage : Page
                 : (en ? $"Showing the latest {safe.Length} record(s). Older records remain available in Focus history." : hant ? $"目前顯示最近 {safe.Length} 筆記錄。較早記錄可在「專注歷史」頁面查看。" : $"当前显示最近 {safe.Length} 条记录。更早的记录可在“专注历史”页面查看。");
         }
         catch { }
-        finally { _historyLoadStarted = false; }
+        finally
+        {
+            _historyLoadStarted = false;
+            if (_historyReloadPending)
+            {
+                _historyReloadPending = false;
+                _ = RefreshHistoryAsync(reset: true);
+            }
+        }
     }
 
     private void RenderHistory(FocusSession[] sessions, StackPanel target, bool includeHeader)
